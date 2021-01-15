@@ -46,7 +46,7 @@ using std::ofstream;
 typedef unsigned int uint32;
 typedef int int32;
 typedef unsigned short uint16;
-typedef unsigned char byte;z
+typedef unsigned char byte;
 typedef struct response_struct {
 	uint32 rdt_sequence;
 	uint32 ft_sequence;
