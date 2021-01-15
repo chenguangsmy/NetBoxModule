@@ -111,6 +111,7 @@ double elapsed_cnt = 0.0;
 double tot_elapsed = 0.0;
 double max_elapsed = 0.0;
 double max_force[6] = { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+bool sendData = false;
 
 int main ( int argc, char ** argv ) {
     double t00 = GetAbsTime();
@@ -184,6 +185,7 @@ int main ( int argc, char ** argv ) {
     mod.Subscribe(MT_PING);
     mod.Subscribe(MT_SAMPLE_GENERATED);
     mod.Subscribe(MT_MOVE_HOME);
+    mod.Subscribe( MT_TASK_STATE_CONFIG );
 
     fprintf( stderr, "Connected to Dragonfly\n");
     
@@ -296,7 +298,7 @@ int main ( int argc, char ** argv ) {
         }
         double t3 = GetAbsTime();
         // writing on disk
-        for( int i=0; i<NUM_SAMPLES; i++){
+      for( int i=0; i<NUM_SAMPLES; i++){
           outdata<<ntohl(*(uint32*)&response[36*i+0])<<","; //RDT seq
           outdata<<ntohl(*(uint32*)&response[36*i+4])<<","; //F/T seq
           outdata<<ntohl(*(uint32*)&response[36*i+8])<<","; //status
@@ -305,6 +307,40 @@ int main ( int argc, char ** argv ) {
           outdata<<endl; //elapse
         }
         double t4 = GetAbsTime();
+      if (inMsg.msg_type == MT_TASK_STATE_CONFIG){
+          MDF_TASK_STATE_CONFIG task_state_data;
+          inMsg.GetData( &task_state_data);
+               switch(task_state_data.id)
+      {
+        case 1:
+          cout << " ST 1, ";
+          sendData = false;
+          break;
+        case 2:
+          cout << " ST 2, ";
+          break;
+        case 3: 
+          cout << " ST 3, ";
+          sendData = true;
+          break;
+        case 4: //Move
+          cout << " ST 4, ";
+          break;
+        case 5: // hold
+          cout << " ST 5, ";
+          break;
+        case 6:
+          cout << " ST 6, ";
+          break;
+        case 7:
+          cout << " ST 7, " << endl;
+          break;
+        default:
+          break;
+      }      
+
+
+      }
       // Recalibrate the force module while its moving home
 			if (inMsg.msg_type == MT_MOVE_HOME){
                 inMsg.GetData(&tsc);
@@ -317,7 +353,6 @@ int main ( int argc, char ** argv ) {
         // subject
         // session_no
 */
-
 			else if (inMsg.msg_type == MT_PING){
         cout << "ping sent" << endl;
 				char MODULE_NAME[] = "NetboxModule";
@@ -339,13 +374,12 @@ int main ( int argc, char ** argv ) {
 				}
 			}
                 
-      else if (inMsg.msg_type == MT_SAMPLE_GENERATED){
+      else if (inMsg.msg_type == MT_SAMPLE_GENERATED && sendData){
 				double t_2 = GetAbsTime();
         
         inMsg.GetData(&sample_gen);
         
-        mod.SendMessage(&RawForceSensorDataMsg); 
-
+        mod.SendMessage(&RawForceSensorDataMsg); //why send data twice??
         mod.SendMessage(&ForceSensorDataMsg);
 
         // write force data in file, 
@@ -376,7 +410,7 @@ int main ( int argc, char ** argv ) {
             printf("\n");
 
             // Output the response data
-
+/*
             printf( "rdt: %08d   ", force_data[NUM_SAMPLES-1]->rdt_sequence );
             printf( "ft : %08d   ", force_data[NUM_SAMPLES-1]->ft_sequence );
             printf( "sta: 0x%08x   ", force_data[NUM_SAMPLES-1]->status );
@@ -415,6 +449,7 @@ int main ( int argc, char ** argv ) {
             printf("\n\n");
 
             disp_cnt = 0;
+            */
         }
       }
       
@@ -429,7 +464,7 @@ int main ( int argc, char ** argv ) {
 				}
 			}
     }
-outdata.close(); //close file
+  outdata.close(); //close file
 
 // close streamming
 *(uint16*)&request[2] = htons(COMMAND_STOP); 
