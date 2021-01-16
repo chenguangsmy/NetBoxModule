@@ -329,6 +329,7 @@ int main ( int argc, char ** argv ) {
         case 5: // hold
           cout << " ST 5, ";
           break;
+          sendData = false;
         case 6:
           cout << " ST 6, ";
           break;
