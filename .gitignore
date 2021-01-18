@@ -19,3 +19,4 @@ netft.c.orig
 readme.txt
 build/*
 main.cpp
+netboxStandAlone/*
