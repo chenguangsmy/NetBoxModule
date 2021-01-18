@@ -40,6 +40,7 @@ double win_counter_freq;
 #include <fstream>  // for writing file
 #include <cstdlib>  // for exit function
 #include <time.h>
+#include "Netboxrec.h"
 
 using std::cerr;
 using std::endl;
@@ -50,13 +51,6 @@ typedef unsigned int uint32;
 typedef int int32;
 typedef unsigned short uint16;
 typedef unsigned char byte;
-typedef struct response_struct
-{ // receieved from FT
-  uint32 rdt_sequence;
-  uint32 ft_sequence;
-  uint32 status;
-  int32 FTData[6];
-} RESPONSE;
 
 /* global variables */
 static RTMA_Module mod;
@@ -65,17 +59,6 @@ double elapsed_cnt = 0.0;
 double tot_elapsed = 0.0;
 double max_elapsed = 0.0;
 double max_force[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-
-/* Functions using */
-const std::string currentDateTime()
-{ // for saving file name
-  time_t now = time(0);
-  struct tm tstruct;
-  char buf[80];
-  tstruct = *localtime(&now);
-  strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", &tstruct);
-  return buf;
-}
 
 void InitializeAbsTime(void)
 {
@@ -122,23 +105,11 @@ double GetAbsTime(void)
 
 int main(int argc, char **argv)
 {
+  Netboxrec netrec; 
   double t00 = GetAbsTime();
+  netrec.socketInit();
 
-#ifdef _WIN32
-  SOCKET socketHandle; /* Handle to UDP socket used to communicate with Net F/T. */
-  WSADATA wsaData;
-  WORD wVersionRequested;
-#else
-  int socketHandle; /* Handle to UDP socket used to communicate with Net F/T. */
-#endif
-  struct sockaddr_in addr;            /* Address of Net F/T. */
-  struct hostent *he;                 /* Host entry for Net F/T. */
-  byte ft_request[8];                 /* The request data sent to the Net F/T. */
-  RESPONSE ft_resp;                   /* The structured ft_response received from the Net F/T. */
-  byte ft_response[36 * NUM_SAMPLES]; /* The raw ft_response data received from the Net F/T. */
-                                      // as receieve NUM_SAMPLES datapoints per batch, multiply by length per datapoints
   int i;                              /* Generic loop/array index. */
-  int err;                            /* Error status of operations. */
   bool keep_going = true;
   CMessage inMsg;
 
@@ -149,35 +120,7 @@ int main(int argc, char **argv)
   }
 
   InitializeAbsTime();
-
-#ifdef _WIN32
-  wVersionRequested = MAKEWORD(2, 2);
-  WSAStartup(wVersionRequested, &wsaData);
-#endif
-
-  // socket initialization
-  socketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-  if (socketHandle == -1)
-  {
-    fprintf(stderr, "Socket could not be opened.\n");
-    exit(1);
-  }
-
-  *(uint16 *)&ft_request[0] = htons(0x1234);        // standard header.
-  *(uint16 *)&ft_request[2] = htons(COMMAND_BATCH); // per table 9.1 in Net F/T user manual.
-  *(uint32 *)&ft_request[4] = htonl(0);             // see section 9.1 in Net F/T user manual.
-
-  // Sending the ft_request.
-  he = gethostbyname("192.168.2.45"); //(argv[1]);
-  memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(PORT);
-
-  err = connect(socketHandle, (struct sockaddr *)&addr, sizeof(addr));
-  if (err == -1)
-  {
-    exit(2);
-  }
+  netrec.sendrequest();
 
   // RTMA initialization
   mod.InitVariables(MID_NETBOX_MODULE, 0);
@@ -228,14 +171,8 @@ int main(int argc, char **argv)
   double AvgForce[] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
   int AvgCnt = 0;
   // .../writing data initialization, should move to another function.
-  ofstream outdata; // written file
-  std::string fname;
-  fname = "/home/vr/rg2/data/forceSensor/" + currentDateTime() + ".dat"; // ^`___`^ not to hard code, change a directory by message!
-                                                                         // how to limit the file size? ask! Em
-  const char *cstr_fname = fname.c_str();
-  outdata.open(cstr_fname);
-  outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
-  send(socketHandle, (const char *)ft_request, 8, 0); //*** get a bunch of data, and read manual of netbox. //-> should move into the response of start session.
+  netrec.fileInit();
+  netrec.sendrequest();
   while (keep_going)
   {
     // consider RTMA as another thread? Thus there would be less delay...
@@ -245,105 +182,37 @@ int main(int argc, char **argv)
     double t0 = GetAbsTime();
     //send( socketHandle, (const char *)request, 8, 0 ); 	//*** get a bunch of data, and read manual of netbox.
     double t01 = GetAbsTime();
-    recv(socketHandle, (char *)ft_response, 36 * NUM_SAMPLES, 0); //*** get information from sensor
+    netrec.recvstream();
     double t1 = GetAbsTime();
     // raw_force_data
     for (int i = 0; i < NUM_SAMPLES; i++)
     {
       raw_force_data[i]->sample_header = sample_gen.sample_header;
-      raw_force_data[i]->rdt_sequence = ntohl(*(uint32 *)&ft_response[i * 36 + 0]);
-      raw_force_data[i]->ft_sequence = ntohl(*(uint32 *)&ft_response[i * 36 + 4]);
-      raw_force_data[i]->status = ntohl(*(uint32 *)&ft_response[i * 36 + 8]);
+      raw_force_data[i]->rdt_sequence = netrec.rdt_sequence[i];
+      raw_force_data[i]->ft_sequence = netrec.ft_sequence[i];
+      raw_force_data[i]->status = netrec.status[i];
+      force_data[i]->sample_header = sample_gen.sample_header;
+      force_data[i]->rdt_sequence = netrec.rdt_sequence[i];
+      force_data[i]->ft_sequence = netrec.ft_sequence[i];
+      force_data[i]->status = netrec.status[i];
       for (int j = 0; j < 6; j++)
       {
-        int32 data;
-        data = ntohl(*(int32 *)&ft_response[i * 36 + 12 + j * 4]); // 36byte each data point, 12 byte offset
-        raw_force_data[i]->data[j] = (double)(((double)data) / ((double)1000000));
+        raw_force_data[i]->data[j] = netrec.raw_force[i*6+j];
+        force_data[i]->data[j] = netrec.force[i*6+j];
+        force_data[i]->offset[j] = netrec.AvgForce[j];
       }
     }
     double t2 = GetAbsTime();
-    double rotF[6] = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-
-    for (int i = 0; i < NUM_SAMPLES; i++)
-    { // get force data, send force data, and write in file
-      for (int j = 0; j < 6; j++)
-        rotF[j] = 0.0;
-      if (AvgCnt < AVG_MAX_CNT)
-      {
-        for (int j = 0; j < 6; j++)
-        {
-          TempAvgForce[j] = TempAvgForce[j] + raw_force_data[i]->data[j];
-        }
-        AvgCnt = AvgCnt + 1;
-      }
-      if (AvgCnt == AVG_MAX_CNT)
-      {
-        for (int j = 0; j < 6; j++)
-        {
-          AvgForce[j] = TempAvgForce[j] / AVG_MAX_CNT;
-        }
-        AvgCnt = AvgCnt + 1; // this will stop the averaging until next time
-      }
-      // force_data
-      force_data[i]->sample_header = sample_gen.sample_header;
-      force_data[i]->rdt_sequence = raw_force_data[i]->rdt_sequence;
-      force_data[i]->ft_sequence = raw_force_data[i]->ft_sequence;
-      force_data[i]->status = raw_force_data[i]->status;
-
-      for (int j = 0; j < 6; j++)
-      {
-        force_data[i]->data[j] = raw_force_data[i]->data[j] - AvgForce[j];
-        force_data[i]->offset[j] = AvgForce[j];
-      }
-
-      int j, k;
-
-      /*        double rotMat[6][6] = {
-          //{0.37695137, 0.92623305, 0.0, 0.0, 0.0, 0.0},
-          //{-0.92623305, 0.37695137, 0.0, 0.0, 0.0, 0.0},
-          {1.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-          {0.0, 1.0, 0.0, 0.0, 0.0, 0.0},
-          {0.0, 0.0, 1.0, 0.0, 0.0, 0.0},
-          {0.0, 0.0, 0.0, 1.0, 0.0, 0.0},
-          {0.0, 0.0, 0.0, 0.0, 1.0, 0.0},
-          {0.0, 0.0, 0.0, 0.0, 0.0, 1.0}
-          };
-
-        for( j=0;j<6;j++) {
-          for( k=0;k<6;k++) {
-            rotF[j] += force_data[i]->data[k]*rotMat[k][j];
-					}
-				}
-*/
-
-      for (j = 0; j < 6; j++)
-      {
-        // force_data[i]->data[j] = rotF[j];
-        if (fabs(force_data[i]->data[j]) > max_force[j])
-          max_force[j] = force_data[i]->data[j];
-      }
-    }
+    
+    netrec.updateAvg();
     double t3 = GetAbsTime();
     // writing on disk
-    for (int i = 0; i < NUM_SAMPLES; i++)
-    {
-      outdata << ntohl(*(uint32 *)&ft_response[36 * i + 0]) << ","; //RDT seq
-      outdata << ntohl(*(uint32 *)&ft_response[36 * i + 4]) << ","; //F/T seq
-      outdata << ntohl(*(uint32 *)&ft_response[36 * i + 8]) << ","; //status
-      for (int j = 0; j < 6; j++)
-        outdata << force_data[i]->data[j] << ",";
-      for (int j = 0; j < 6; j++)
-        outdata << force_data[i]->offset[j] << ",";
-      outdata << endl; //elapse
-    }
+    netrec.writeFile();
     double t4 = GetAbsTime();
     // Recalibrate the force module while its moving home
     if (inMsg.msg_type == MT_MOVE_HOME)
     {
       inMsg.GetData(&tsc);
-      AvgCnt = 0;
-      for (i = 0; i < 6; i++)
-        TempAvgForce[i] = (double)0.0;
     }
  /*   else if (inMsg.msg_type == MT_SESSION_INFO)
     { // ^`___`^ for saving in a regular filename
@@ -381,9 +250,6 @@ int main(int argc, char **argv)
       inMsg.GetData(&sample_gen);
       mod.SendMessage(&RawForceSensorDataMsg);
       mod.SendMessage(&ForceSensorDataMsg);
-
-      // write force data in file,
-      // sequentially: rdt_sequence, ft_sequence, status, , data[6]
 
       double t_3 = GetAbsTime();
 
@@ -434,12 +300,6 @@ int main(int argc, char **argv)
           printf("%.2lf  ", force_data[NUM_SAMPLES - 1]->data[i]);
         }
         printf("\n\n");
-        printf("ROT: ");
-        for (i = 0; i < 6; i++)
-        {
-          printf("%.2lf  ", rotF[i]);
-        }
-        printf("\n\n");
 
         printf("Max Force: ");
         for (i = 0; i < 6; i++)
@@ -463,17 +323,8 @@ int main(int argc, char **argv)
       }
     }
   }
-  outdata.close(); //close file
-
-  // close streamming
-  *(uint16 *)&ft_request[2] = htons(COMMAND_STOP);
-  send(socketHandle, (const char *)ft_request, 8, 0);
-
-/* Close socket */
-#ifdef _WIN32
-  closesocket(socketHandle);
-#else
-  close(socketHandle);
-#endif
+  netrec.closeFile();
+  netrec.stopStream();
+  netrec.socketClose();
   return 0;
 }
