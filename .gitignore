@@ -1,5 +1,4 @@
 ._NetboxModule.cpp
-Makefile
 NetboxModule
 NetboxModule.cpp.20200306
 NetboxModule.cpp.20200311.elapse.tar.gz
@@ -17,3 +16,5 @@ makefile.orig
 modules.h
 netft.c.orig
 readme.txt
+build/*
+main.cpp
