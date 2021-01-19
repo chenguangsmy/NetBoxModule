@@ -30,16 +30,17 @@ double win_counter_freq;
 #define AVG_MAX_CNT 5    // average 5 samples
 
 #include <sys/types.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include "/home/vr/RTMA/include/RTMA.h"
 #include "/home/vr/rg2/include/RTMA_config.h"
 #include <iostream> // cg: this block I changed it
+#include <string>
 #include <fstream>  // for writing file
 #include <cstdlib>  // for exit function
 #include <time.h>
+#include <pthread.h>
 #include "Netboxrec.h"
 
 using std::cerr;
@@ -60,7 +61,8 @@ double tot_elapsed = 0.0;
 double max_elapsed = 0.0;
 double t0, t1, t2, t3, t4;
 int i, j, k; /* Generic loop/array index. */
-bool keep_going = true;
+bool keep_going = false;
+bool fwriting = false;
 
 void InitializeAbsTime(void)
 {
@@ -96,7 +98,6 @@ class NetftRTMA
 {
   // variables;
 public:
-
 private:
   //static RTMA_Module mod;
   RTMA_Module mod;
@@ -106,8 +107,18 @@ private:
   MDF_RAW_FORCE_SENSOR_DATA raw_force_data; //data
   MDF_SAMPLE_GENERATED sample_gen;
   MDF_TASK_STATE_CONFIG tsc;
+  MDF_SESSION_CONFIG ssconfig;
+  MDF_XM_START_SESSION stsession;
   bool got_msg;
+  char data_dir[MAX_DATA_DIR_LEN];
+  char subject_name[TAG_LENGTH];
+  int  session_num;
+  string file_name;       //seperation file name
+  string file_dir;
+  bool flag_sconfig;
+  bool flag_xmconfig;
   CMessage inMsg;
+
 protected:
   int argc;
   char **argv;
@@ -148,8 +159,11 @@ public:
   NetftRTMA(int argc, char **argv) : argc(argc), argv(argv)
 
   {
+    printf("entered NetftRTMA construction!\n");
     // variables
     got_msg = false;
+    flag_sconfig = false;
+    flag_xmconfig = false;
     ForceSensorDataMsg = MT_FORCE_SENSOR_DATA;
     RawForceSensorDataMsg = MT_RAW_FORCE_SENSOR_DATA;
     //functions
@@ -178,6 +192,9 @@ public:
     mod.Subscribe(MT_SAMPLE_GENERATED);
     mod.Subscribe(MT_MOVE_HOME);
     mod.Subscribe(MT_SESSION_CONFIG);
+    mod.Subscribe(MT_XM_START_SESSION);
+
+    keep_going = true;
   }
 
   // deconstruction;
@@ -191,15 +208,25 @@ void NetftRTMA::respond(Netboxrec *netrec)
 {
   if (inMsg.msg_type == MT_MOVE_HOME)
   {
+    printf("MT_MOVE_HOME: update Avg. \n");
     netrec->updateAvg();
     inMsg.GetData(&tsc);
   }
-  /*   else if (inMsg.msg_type == MT_SESSION_CONFIG)
-    { // ^`___`^ for saving in a regular filename
-      // data_root_folder
-      // subject
-      // session_no
-    }*/
+  else if (inMsg.msg_type == MT_SESSION_CONFIG)
+  { 
+    inMsg.GetData(&ssconfig);
+    strcpy(data_dir, ssconfig.data_dir); //need to convert to char[].c_str()..finished
+    file_dir = data_dir;
+    flag_sconfig = true;
+  }
+  else if (inMsg.msg_type == MT_XM_START_SESSION)
+  {
+    inMsg.GetData(&stsession);
+    strcpy(subject_name, stsession.subject_name);
+    session_num = stsession.calib_session_id;
+    file_name = printf("%s%d", subject_name, session_num);
+    flag_xmconfig = true;
+  }
   else if (inMsg.msg_type == MT_PING)
   {
     cout << "ping sent" << endl;
@@ -226,8 +253,9 @@ void NetftRTMA::respond(Netboxrec *netrec)
   else if (inMsg.msg_type == MT_SAMPLE_GENERATED)
   {
     t2 = GetAbsTime();
-
     inMsg.GetData(&sample_gen);
+    // package message here!
+    updateMsg(netrec);
     mod.SendMessage(&RawForceSensorDataMsg);
     mod.SendMessage(&ForceSensorDataMsg);
   }
@@ -238,83 +266,75 @@ void NetftRTMA::respond(Netboxrec *netrec)
       printf("got exit!\n");
       mod.SendSignal(MT_EXIT_ACK);
       mod.DisconnectFromMMM();
-      keep_going = 0;
+      keep_going = false;
+
+      netrec->closeFile();
+      fwriting = false; 
+      netrec->stopStream();
+
       //break;
     }
   }
+
+  // task conditions logic
+  if (flag_sconfig & flag_xmconfig & (~fwriting)){//not writing file, but receieved config, open file
+  // concern: if a session has longer (more than a session), will this still work?
+    netrec->fileInit(file_dir + '/' + file_name);
+    netrec->sendrequest();
+    printf("file initialized\n");
+    //reset flags
+    flag_sconfig = false;
+    flag_xmconfig = false;
+    fwriting = true;
+  }
+}
+
+void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
+{
+  printf("Start respondRTMA function!");
+  while (1)
+  {
+    //receieve Msg
+    netRTMA->receive();
+    //respond Msg
+    netRTMA->respond(netrec);
+    if (keep_going == false){
+		printf("Keep_going is %d\n", keep_going);
+		printf("enter break point. \n");
+		break;
+	}
+  }
+  printf("Finish respondRTMA function!");
+}
+
+void *processNetrec(void *arg)
+{ // how to deal with argument proboem?
+  Netboxrec *netrec = (Netboxrec *)arg;
+  printf("Enter thread netrec! \n");
+  while (1)
+  {
+    if (keep_going & fwriting){
+    netrec->recvstream();
+    netrec->writeFile();
+    }
+  }
+  printf("Finish thread netrec! \n");
 }
 
 int main(int argc, char **argv)
 {
   NetftRTMA netRTMA(argc, argv);
   Netboxrec netrec;
-  t0 = GetAbsTime();
   netrec.socketInit();
   InitializeAbsTime();
-  netrec.sendrequest();
 
   int disp_cnt = DISP_MAX_CNT;
-  netrec.fileInit();
-  netrec.sendrequest();
-  while (keep_going)
-  {
-    // consider RTMA as another thread? Thus there would be less delay...
-    netRTMA.receive();
-    t0 = GetAbsTime();
-    netrec.recvstream();
-    t1 = GetAbsTime();
-    netRTMA.updateMsg(&netrec);
-    t3 = GetAbsTime();
-    // writing on disk
-    netrec.writeFile();
-    t4 = GetAbsTime();
-    // Recalibrate the force module while its moving home
-    netRTMA.respond(&netrec);
-    t3 = GetAbsTime();
 
-    elapsed = t3 - t2;
-    elapsed_cnt++;
-    tot_elapsed += elapsed;
-    if (elapsed > max_elapsed)
-      max_elapsed = elapsed;
-    disp_cnt++;
+  pthread_t netrec_thread;
+  pthread_create(&netrec_thread, NULL, processNetrec, NULL);
 
-    if (disp_cnt >= DISP_MAX_CNT)
-    {
-      cout << "\n\nelapsed    : " << 1000 * elapsed << " msec" << endl;
-      cout << "elapsed_raw   : " << 1000 * (t2 - t1) << "msec" << endl;
-      cout << "elapsed_foc   : " << 1000 * (t3 - t2) << "msec" << endl;
-      cout << "elapsed_wit   : " << 1000 * (t4 - t3) << "msec" << endl;
-      cout << "avg elapsed: " << 1000 * tot_elapsed / elapsed_cnt << " msec" << endl;
-      cout << "max elapsed: " << 1000 * max_elapsed << " msec" << endl;
-      printf("\n");
-
-      // Output the ft_response data
-      /*
-      printf("rdt: %08d   ", force_data[NUM_SAMPLES - 1]->rdt_sequence);
-      printf("ft : %08d   ", force_data[NUM_SAMPLES - 1]->ft_sequence);
-      printf("sta: 0x%08x   ", force_data[NUM_SAMPLES - 1]->status);
-      printf("\n");
-
-      printf("RAW: ");
-
-      for (i = 0; i < 6; i++)
-      {
-        printf("%.2lf  ", raw_force_data[NUM_SAMPLES - 1]->data[i]);
-      }
-      printf("\n");
-      printf("ADJ: ");
-      for (i = 0; i < 6; i++)
-      {
-        printf("%.2lf  ", force_data[NUM_SAMPLES - 1]->data[i]);
-      }
-      printf("\n\n");
-*/
-      disp_cnt = 0;
-    }
-  }
-  netrec.closeFile();
-  netrec.stopStream();
+  respondRTMA(&netRTMA, &netrec);
+  pthread_join(netrec_thread, NULL);
   netrec.socketClose();
   return 0;
 }
