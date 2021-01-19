@@ -96,8 +96,8 @@ class NetftRTMA
 {
   // variables;
 public:
-  int argc;
-  char **argv;
+
+private:
   //static RTMA_Module mod;
   RTMA_Module mod;
   CMessage ForceSensorDataMsg;              //message
@@ -108,9 +108,9 @@ public:
   MDF_TASK_STATE_CONFIG tsc;
   bool got_msg;
   CMessage inMsg;
-
-private:
 protected:
+  int argc;
+  char **argv;
   // functions;
 public:
   // connectTo();
@@ -119,15 +119,16 @@ public:
     got_msg = mod.ReadMessage(&inMsg, 0);
   }
   void respond(Netboxrec *netrec);
-  void writeMsg(Netboxrec *netrec)
+  void updateMsg(Netboxrec *netrec)
   {
     i = 0;
     // only package the first message in a set of NUM_SAMPLES
     raw_force_data.sample_header = sample_gen.sample_header;
+    force_data.sample_header = sample_gen.sample_header;
+    // set these variables private and visit them using function
     raw_force_data.rdt_sequence = netrec->rdt_sequence[i];
     raw_force_data.ft_sequence = netrec->ft_sequence[i];
     raw_force_data.status = netrec->status[i];
-    force_data.sample_header = sample_gen.sample_header;
     force_data.rdt_sequence = netrec->rdt_sequence[i];
     force_data.ft_sequence = netrec->ft_sequence[i];
     force_data.status = netrec->status[i];
@@ -172,25 +173,11 @@ public:
       mod.ConnectToMMM("192.168.2.48:7112");
     }
 
-    //allocate size ? how to deal with this? as size = 1?
-    /*
-  ForceSensorDataMsg.AllocateData(sizeof(MDF_FORCE_SENSOR_DATA));
-  for (i = 0; i < NUM_SAMPLES; i++)
-  {
-    force_data[i] = (MDF_FORCE_SENSOR_DATA *)malloc(sizeof(MDF_FORCE_SENSOR_DATA));
-  }
-  force_data[NUM_SAMPLES - 1] = {(MDF_FORCE_SENSOR_DATA *)ForceSensorDataMsg.GetDataPointer()}; // change pointer to struct
-  RawForceSensorDataMsg.AllocateData(sizeof(MDF_RAW_FORCE_SENSOR_DATA));
-  for (i = 0; i < NUM_SAMPLES; i++)
-  {
-    raw_force_data[i] = (MDF_RAW_FORCE_SENSOR_DATA *)malloc(sizeof(MDF_RAW_FORCE_SENSOR_DATA));
-  }
-  raw_force_data[NUM_SAMPLES - 1] = {(MDF_RAW_FORCE_SENSOR_DATA *)RawForceSensorDataMsg.GetDataPointer()}; // change pointer to struct
-*/
     mod.Subscribe(MT_EXIT);
     mod.Subscribe(MT_PING);
     mod.Subscribe(MT_SAMPLE_GENERATED);
     mod.Subscribe(MT_MOVE_HOME);
+    mod.Subscribe(MT_SESSION_CONFIG);
   }
 
   // deconstruction;
@@ -207,7 +194,7 @@ void NetftRTMA::respond(Netboxrec *netrec)
     netrec->updateAvg();
     inMsg.GetData(&tsc);
   }
-  /*   else if (inMsg.msg_type == MT_SESSION_INFO)
+  /*   else if (inMsg.msg_type == MT_SESSION_CONFIG)
     { // ^`___`^ for saving in a regular filename
       // data_root_folder
       // subject
@@ -276,7 +263,7 @@ int main(int argc, char **argv)
     t0 = GetAbsTime();
     netrec.recvstream();
     t1 = GetAbsTime();
-    netRTMA.writeMsg(&netrec);
+    netRTMA.updateMsg(&netrec);
     t3 = GetAbsTime();
     // writing on disk
     netrec.writeFile();

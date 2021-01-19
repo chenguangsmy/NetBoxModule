@@ -121,6 +121,13 @@ public:
   int updateAvg();     // get average through a set of data
   void writeFile();     // write data on .csv file
   void closeFile();     // close data write stream
+
+  double* getforceData(); // return first value in this forceData
+  double* getAverageforceData(); // return average force data
+  int     getRDT();
+  int     getFT();
+  int     getstatus();
+  
 public:
   Netboxrec()
   {
