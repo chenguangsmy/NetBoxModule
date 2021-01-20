@@ -65,6 +65,8 @@ bool keep_going = false;
 bool fwriting = false;
 string fname;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+FLAGS flag;
+RESPONSE forcedat; 
 
 void InitializeAbsTime(void)
 {
@@ -128,52 +130,15 @@ protected:
   // functions;
 public:
   // connectTo();
-  void receive()
-  {
-    printf("enter receieve\n");
-    //got_msg = mod.ReadMessage(&inMsg, 0.01);
-    got_msg = mod.ReadMessage(&inMsg, 0.5);
-    printf("enter receieve ln 2\n");
-    if (got_msg == true)
-      flag_sent = false;
-  }
-  void respond(RESPONSE *, FLAGS *);
-  void updateMsg(RESPONSE *forceData)
-  {
-    i = 0;
-    // only package the first message in a set of NUM_SAMPLES
-    // ** dangerous here! alter to mutex_lock and unlock, besides, use a structure!
-    raw_force_data.sample_header = sample_gen.sample_header;
-    force_data.sample_header = sample_gen.sample_header;
-    // set these variables private and visit them using function
-    // mutex lock here
-    pthread_mutex_lock(&mutex);
-    raw_force_data.rdt_sequence = forceData->rdt_sequence;
-    raw_force_data.ft_sequence = forceData->ft_sequence;
-    raw_force_data.status = forceData->status;
-    for (j = 0; j < 6; j++)
-    {
-      force_data.data[j] = forceData->FTData[j];
-      force_data.offset[j] = forceData->FTAvg[j];
-    }
-    // mutex unlock here
-    pthread_mutex_unlock(&mutex);
-    force_data.rdt_sequence = raw_force_data.rdt_sequence;
-    force_data.ft_sequence = raw_force_data.ft_sequence;
-    force_data.status = raw_force_data.status;
-    for (j = 0; j < 6; j++)
-    {
-      raw_force_data.data[j] = force_data.data[j] + force_data.offset[j];
-    }
-  }
-
+  void receive();
+  FLAGS respond(RESPONSE *, FLAGS);
+  void updateMsg(RESPONSE *);
   //
   //private:
   //protected:
   // construction;
 public:
   NetftRTMA(int argc, char **argv) : argc(argc), argv(argv)
-
   {
     printf("entered NetftRTMA construction!\n");
     // variables
@@ -220,21 +185,59 @@ public:
     //clean the space malloced.
   }
 };
-
-void NetftRTMA::respond(RESPONSE *froceData, FLAGS *flag)
+void NetftRTMA::updateMsg(RESPONSE *forceData)
 {
+    i = 0;
+    // only package the first message in a set of NUM_SAMPLES
+    // ** dangerous here! alter to mutex_lock and unlock, besides, use a structure!
+    raw_force_data.sample_header = sample_gen.sample_header;
+    force_data.sample_header = sample_gen.sample_header;
+    // set these variables private and visit them using function
+    // mutex lock here
+    pthread_mutex_lock(&mutex);
+    raw_force_data.rdt_sequence = forceData->rdt_sequence;
+    raw_force_data.ft_sequence = forceData->ft_sequence;
+    raw_force_data.status = forceData->status;
+    for (j = 0; j < 6; j++)
+    {
+      force_data.data[j] = forceData->FTData[j];
+      force_data.offset[j] = forceData->FTAvg[j];
+    }
+    // mutex unlock here
+    pthread_mutex_unlock(&mutex);
+    force_data.rdt_sequence = raw_force_data.rdt_sequence;
+    force_data.ft_sequence = raw_force_data.ft_sequence;
+    force_data.status = raw_force_data.status;
+    for (j = 0; j < 6; j++)
+    {
+      raw_force_data.data[j] = force_data.data[j] + force_data.offset[j];
+    }
+  }
+void NetftRTMA::receive()
+{
+    printf("netRTMA: enter receieve\n");
+    //got_msg = mod.ReadMessage(&inMsg, 0.01);
+    got_msg = mod.ReadMessage(&inMsg, 0.0);
+    printf("netRTMA: enter receieve ln 2\n");
+    if (got_msg == true)
+      flag_sent = false;
+  }
+FLAGS NetftRTMA::respond(RESPONSE* froceData, FLAGS flag)
+{
+	printf("netRTMA: enter respond function\n");
   if (inMsg.msg_type == MT_MOVE_HOME)
   {
     printf("MT_MOVE_HOME: update Avg. \n");
     // mutex lock here
-    pthread_mutex_lock(&thread);
-    flag->UpdateAvg = true;
+    pthread_mutex_lock(&mutex);
+    flag.UpdateAvg = true;
     // mutex unlock here
-    pthread_mutex_unlock(&thread);
+    pthread_mutex_unlock(&mutex);
     inMsg.GetData(&tsc);
   }
   else if (inMsg.msg_type == MT_SESSION_CONFIG)
   {
+	  printf("MT_SESSION_CONFIG. \n");
     inMsg.GetData(&ssconfig);
     strcpy(data_dir, ssconfig.data_dir);
     file_dir = data_dir;
@@ -293,10 +296,10 @@ void NetftRTMA::respond(RESPONSE *froceData, FLAGS *flag)
       keep_going = false;
 
       //netrec->closeFile();  ////.....
-      flag->CloseFile = true;
+      flag.CloseFile = true;
       fwriting = false;
       //netrec->stopStream();  //.....
-      flag->stopStream = true;
+      flag.stopStream = true;
 
       //break;
     }
@@ -311,9 +314,9 @@ void NetftRTMA::respond(RESPONSE *froceData, FLAGS *flag)
     fname = file_dir + '/' + file_name;
     cout << "fname should be" << fname << endl;
     //netrec->fileInit(fname.c_str());  //.....!!!!!!!!!!!!!!???????
-    flag->FileInit = true;
+    flag.FileInit = true;
     //netrec->sendrequest();            //.....
-    flag->SendRequest = true;
+    flag.SendRequest = true;
     printf("file initialized\n");
     //reset flags
     flag_sconfig = false;
@@ -321,9 +324,10 @@ void NetftRTMA::respond(RESPONSE *froceData, FLAGS *flag)
     fwriting = true;
   }
   //  cout<<"end of NetftRTMA::respond"<<endl;
+	return flag;
 }
 
-void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
+void respondRTMA(NetftRTMA *netRTMA)
 {
   printf("Start respondRTMA function!");
   while (1)
@@ -331,7 +335,12 @@ void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
     //receieve Msg
     netRTMA->receive();
     //respond Msg
-    netRTMA->respond(&(netrec->ft_resp), &(netrec->flag));
+    printf("G: finish receive, before lock 00 \n");
+    printf("G: finish receive, before lock 01 \n");
+    pthread_mutex_lock(&mutex);
+    printf("G: finish receive, lock, before respond\n");
+    flag = netRTMA->respond(&forcedat, flag);
+    pthread_mutex_unlock(&mutex);
     printf("end of netRTMA->respond\n");
     if (keep_going == false)
     {
@@ -339,9 +348,9 @@ void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
       printf("enter break point. \n");
       break;
     }
-    printf("end of one respondRTMA loop\n ");
+    printf("G: end of one respondRTMA loop\n");
   }
-  printf("Finish respondRTMA function!");
+  printf("G: Finish respondRTMA function!");
 }
 
 void *processNetrec(void *arg)
@@ -350,45 +359,51 @@ void *processNetrec(void *arg)
   printf("Enter thread netrec! \n");
   while (1)
   {
-    printf("in processNetrec loop! \n");
+    printf("G: start processNetrec loop! \n");
     // mutex_lock flag
     pthread_mutex_lock(&mutex);
-    if (netrec->flag.stream)
+    printf("G: start processNetrec loop, lock finished! \n");
+    netrec->getforceData();
+    printf("G: start processNetrec loop, lock finished01! \n");
+    forcedat = netrec->getforceData();
+    if (flag.stream)
     {
-      printf("start streaming! ");
+      printf("G: start streaming! ");
       netrec->recvstream();
       netrec->writeFile();
     }
-    if (netrec->flag.UpdateAvg)
+    if (flag.UpdateAvg)
     {
-
-      netrec->flag.UpdateAvg = false;
+		printf("G: flag.Updateavg! \n");
+      flag.UpdateAvg = false;
     }
-    if (netrec->flag.FileInit)
+    if (flag.FileInit)
     {
+		printf("G: flag.FileInit! \n");
       netrec->fileInit(fname.c_str()); // init file here
-      netrec->flag.FileInit = false;
+      flag.FileInit = false;
     }
-    if (netrec->flag.SendRequest)
+    if (flag.SendRequest)
     {
-
-      netrec->flag.SendRequest = false;
+		printf("G: flag.SendRequest! \n");
+      flag.SendRequest = false;
     }
-    if (netrec->flag.stopStream)
+    if (flag.stopStream)
     {
-
-      netrec->flag.stream = false;
-      netrec->flag.stopStream = false;
+		printf("G: flag.Stopstream! \n");
+      flag.stream = false;
+      flag.stopStream = false;
     }
-    if (netrec->flag.CloseFile)
+    if (flag.CloseFile)
     {
-
-      netrec->flag.CloseFile = false;
+		printf("G: flag.CloseFile! \n");
+      flag.CloseFile = false;
     }
     //mutex unlock flag;
     pthread_mutex_unlock(&mutex);
+    printf("G: end processNetrec loop! \n");
   }
-  printf("Finish thread netrec! \n");
+  printf("G: Finish thread netrec! \n");
 }
 
 int main(int argc, char **argv)
@@ -402,7 +417,7 @@ int main(int argc, char **argv)
 
   pthread_t netrec_thread;
   pthread_create(&netrec_thread, NULL, processNetrec, NULL);
-  respondRTMA(&netRTMA, &netrec);
+  respondRTMA(&netRTMA);
   pthread_join(netrec_thread, NULL);
   netrec.socketClose();
   return 0;

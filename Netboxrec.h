@@ -134,11 +134,11 @@ public:
   void closeFile();     // close data write stream
   void showElapse();
 
-  double *getforceData();        // return first value in this forceData
   double *getAverageforceData(); // return average force data
   int getRDT();
   int getFT();
   int getstatus();
+  RESPONSE getforceData(); 
 
 public:
   Netboxrec()
@@ -373,4 +373,8 @@ void Netboxrec::showElapse()
       disp_cnt = 0;
     }
   */
+}
+
+RESPONSE Netboxrec::getforceData(){
+	return ft_resp;
 }
