@@ -50,12 +50,22 @@ typedef int int32;
 typedef unsigned short uint16;
 typedef unsigned char byte;
 typedef struct response_struct
-{ // receieved from FT
+{ // receieved from FT, trans it to NetboxModule.
   uint32 rdt_sequence;
   uint32 ft_sequence;
   uint32 status;
   int32 FTData[6];
+  int32 FTAvg[6];
 } RESPONSE;
+typedef struct response_flags
+{ // flags mark how should the Netboxrec function do
+  bool UpdateAvg;
+  bool CloseFile;
+  bool stopStream;
+  bool SendRequest;
+  bool FileInit;
+  bool stream;
+} FLAGS;
 
 /* Functions using */
 const std::string currentDateTime()
@@ -83,6 +93,7 @@ public:
   struct hostent *he;                 /* Host entry for Net F/T. */
   byte ft_request[8];                 /* The request data sent to the Net F/T. */
   RESPONSE ft_resp;                   /* The structured ft_response received from the Net F/T. */
+  FLAGS flag;                         /* Command flag sending from RTMA module */
   byte ft_response[36 * NUM_SAMPLES]; /* The raw ft_response data received from the Net F/T. */
                                       // as receieve NUM_SAMPLES datapoints per batch, multiply by length per datapoints
   int i, j, k;                        /* Generic loop/array index. */
@@ -107,7 +118,7 @@ private:
 protected:
   // functions
 public:
-  int fileInit(string); // set up the file writing to seperate
+  int fileInit(const char *); // set up the file writing to seperate
   int fileClose();      // close the file
 
   int socketInit();     // set up the socket recording from FT
@@ -190,19 +201,29 @@ int Netboxrec::socketClose()
 #endif
   return 1;
 }
-int Netboxrec::fileInit(string fname)
+int Netboxrec::fileInit(const char fname[80])
 {
-  cstr_fname = fname.c_str();
-  outdata.open(cstr_fname);
+  //cstr_fname = fname.c_str();
+  //printf("fname is: %s", cstr_fname);
+  //outdata.open(cstr_fname);
+  printf("fname is: %s", fname);
+  outdata.open(fname);
+  outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
+  printf("try another line \n");
   outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
 }
 int Netboxrec::sendrequest()
 {
+	printf("enter sendrequest\n");
+	// should try this line!
   send(socketHandle, (const char *)ft_request, 8, 0); //*** get a bunch of data, and read manual of netbox. //-> should move into the response of start session.
+	printf("finished sendrequest\n");
 }
 int Netboxrec::recvstream()
 {
+  printf("recv stream!   ");
   recv(socketHandle, (char *)ft_response, 36 * NUM_SAMPLES, 0); //*** get information from sensor
+  printf("start tidy files! \n");
   for (i = 0; i < NUM_SAMPLES; i++)
   {
     rdt_sequence[i] = ntohl(*(uint32 *)&ft_response[i * 36 + 0]);
@@ -217,6 +238,14 @@ int Netboxrec::recvstream()
     {
       force[i * 6 + j] = raw_force[i * 6 + j] - AvgForce[j];
     }
+  }
+  // copy data into resp
+  ft_resp.rdt_sequence = rdt_sequence[NUM_SAMPLES-1];
+  ft_resp.ft_sequence = ft_sequence[NUM_SAMPLES-1];
+  ft_resp.status = status[NUM_SAMPLES-1];
+  for (i = 0; i < 6; i++){
+    ft_resp.FTData[i] = force[(NUM_SAMPLES-1)*6 + i];
+    ft_resp.FTAvg[i] = AvgForce[j];
   }
 }
 int Netboxrec::updateAvg()
@@ -239,6 +268,7 @@ int Netboxrec::updateAvg()
 }
 void Netboxrec::writeFile()
 {
+  printf("write file! \n");
   for (i = 0; i < NUM_SAMPLES; i++) // according to header sequence
   {
     outdata << rdt_sequence[i] << ","; //RDT seq
