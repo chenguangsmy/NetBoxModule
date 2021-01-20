@@ -37,8 +37,8 @@ double win_counter_freq;
 #include "/home/vr/rg2/include/RTMA_config.h"
 #include <iostream> // cg: this block I changed it
 #include <string>
-#include <fstream>  // for writing file
-#include <cstdlib>  // for exit function
+#include <fstream> // for writing file
+#include <cstdlib> // for exit function
 #include <time.h>
 #include <pthread.h>
 #include "Netboxrec.h"
@@ -63,6 +63,8 @@ double t0, t1, t2, t3, t4;
 int i, j, k; /* Generic loop/array index. */
 bool keep_going = false;
 bool fwriting = false;
+string fname;
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void InitializeAbsTime(void)
 {
@@ -112,8 +114,8 @@ private:
   bool got_msg;
   char data_dir[MAX_DATA_DIR_LEN];
   char subject_name[TAG_LENGTH];
-  int  session_num;
-  char file_name[20];       //seperation file name
+  int session_num;
+  char file_name[20]; //seperation file name
   string file_dir;
   bool flag_sconfig;
   bool flag_xmconfig;
@@ -128,23 +130,24 @@ public:
   // connectTo();
   void receive()
   {
-	  printf("enter receieve\n");
+    printf("enter receieve\n");
     //got_msg = mod.ReadMessage(&inMsg, 0.01);
     got_msg = mod.ReadMessage(&inMsg, 0.5);
     printf("enter receieve ln 2\n");
-    if (got_msg == true) flag_sent = false;
-    
+    if (got_msg == true)
+      flag_sent = false;
   }
-  void respond(RESPONSE*, FLAGS* );
-  void updateMsg(RESPONSE* forceData)
+  void respond(RESPONSE *, FLAGS *);
+  void updateMsg(RESPONSE *forceData)
   {
     i = 0;
     // only package the first message in a set of NUM_SAMPLES
-    // ** dangerous here! alter to mutex_lock and unlock, besides, use a structure!  
+    // ** dangerous here! alter to mutex_lock and unlock, besides, use a structure!
     raw_force_data.sample_header = sample_gen.sample_header;
     force_data.sample_header = sample_gen.sample_header;
     // set these variables private and visit them using function
     // mutex lock here
+    pthread_mutex_lock(&mutex);
     raw_force_data.rdt_sequence = forceData->rdt_sequence;
     raw_force_data.ft_sequence = forceData->ft_sequence;
     raw_force_data.status = forceData->status;
@@ -154,6 +157,7 @@ public:
       force_data.offset[j] = forceData->FTAvg[j];
     }
     // mutex unlock here
+    pthread_mutex_unlock(&mutex);
     force_data.rdt_sequence = raw_force_data.rdt_sequence;
     force_data.ft_sequence = raw_force_data.ft_sequence;
     force_data.status = raw_force_data.status;
@@ -217,31 +221,33 @@ public:
   }
 };
 
-void NetftRTMA::respond(RESPONSE* froceData , FLAGS* flag)
+void NetftRTMA::respond(RESPONSE *froceData, FLAGS *flag)
 {
   if (inMsg.msg_type == MT_MOVE_HOME)
   {
     printf("MT_MOVE_HOME: update Avg. \n");
     // mutex lock here
+    pthread_mutex_lock(&thread);
     flag->UpdateAvg = true;
     // mutex unlock here
+    pthread_mutex_unlock(&thread);
     inMsg.GetData(&tsc);
   }
   else if (inMsg.msg_type == MT_SESSION_CONFIG)
-  { 
+  {
     inMsg.GetData(&ssconfig);
-    strcpy(data_dir, ssconfig.data_dir); 
+    strcpy(data_dir, ssconfig.data_dir);
     file_dir = data_dir;
     flag_sconfig = true;
   }
   else if (inMsg.msg_type == MT_XM_START_SESSION)
   {
-	printf("MT_XM_START_SESSION receieved! \n");
+    printf("MT_XM_START_SESSION receieved! \n");
     inMsg.GetData(&stsession);
     strcpy(subject_name, stsession.subject_name);
     session_num = stsession.calib_session_id;
     sprintf(file_name, "%s%d.csv", subject_name, session_num);
-    cout<<"filename: "<<file_name<<endl;
+    cout << "filename: " << file_name << endl;
     flag_xmconfig = true;
   }
   else if (inMsg.msg_type == MT_PING)
@@ -271,7 +277,7 @@ void NetftRTMA::respond(RESPONSE* froceData , FLAGS* flag)
     t2 = GetAbsTime();
     inMsg.GetData(&sample_gen);
     // package message here!
-    updateMsg((RESPONSE*) froceData);
+    updateMsg((RESPONSE *)froceData);
     //printf("        send data! \n");
     mod.SendMessage(&RawForceSensorDataMsg);
     mod.SendMessage(&ForceSensorDataMsg);
@@ -288,7 +294,7 @@ void NetftRTMA::respond(RESPONSE* froceData , FLAGS* flag)
 
       //netrec->closeFile();  ////.....
       flag->CloseFile = true;
-      fwriting = false; 
+      fwriting = false;
       //netrec->stopStream();  //.....
       flag->stopStream = true;
 
@@ -297,12 +303,13 @@ void NetftRTMA::respond(RESPONSE* froceData , FLAGS* flag)
   }
 
   // task conditions logic
-  if (flag_sconfig & flag_xmconfig & (~fwriting)){//not writing file, but receieved config, open file
-  // concern: if a session has longer (more than a session), will this still work?
+  if (flag_sconfig & flag_xmconfig & (~fwriting))
+  { //not writing file, but receieved config, open file
+    // concern: if a session has longer (more than a session), will this still work?
     printf("before enter fileInit()\n");
-    cout<<file_name<<endl;
-    string fname = file_dir + '/' + file_name;
-    cout<<"fname should be"<< fname<<endl;
+    cout << file_name << endl;
+    fname = file_dir + '/' + file_name;
+    cout << "fname should be" << fname << endl;
     //netrec->fileInit(fname.c_str());  //.....!!!!!!!!!!!!!!???????
     flag->FileInit = true;
     //netrec->sendrequest();            //.....
@@ -313,7 +320,7 @@ void NetftRTMA::respond(RESPONSE* froceData , FLAGS* flag)
     flag_xmconfig = false;
     fwriting = true;
   }
-//  cout<<"end of NetftRTMA::respond"<<endl;
+  //  cout<<"end of NetftRTMA::respond"<<endl;
 }
 
 void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
@@ -326,12 +333,13 @@ void respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
     //respond Msg
     netRTMA->respond(&(netrec->ft_resp), &(netrec->flag));
     printf("end of netRTMA->respond\n");
-    if (keep_going == false){
-		printf("Keep_going is %d\n", keep_going);
-		printf("enter break point. \n");
-		break;
-	}
-	printf("end of one respondRTMA loop\n ");
+    if (keep_going == false)
+    {
+      printf("Keep_going is %d\n", keep_going);
+      printf("enter break point. \n");
+      break;
+    }
+    printf("end of one respondRTMA loop\n ");
   }
   printf("Finish respondRTMA function!");
 }
@@ -342,35 +350,43 @@ void *processNetrec(void *arg)
   printf("Enter thread netrec! \n");
   while (1)
   {
-	printf("in processNetrec loop! \n");
-  // mutex_lock flag
-    if (netrec->flag.stream){
-		printf("start streaming! ");
-    netrec->recvstream();
-    netrec->writeFile();
+    printf("in processNetrec loop! \n");
+    // mutex_lock flag
+    pthread_mutex_lock(&mutex);
+    if (netrec->flag.stream)
+    {
+      printf("start streaming! ");
+      netrec->recvstream();
+      netrec->writeFile();
     }
-    if (netrec->flag.UpdateAvg){
+    if (netrec->flag.UpdateAvg)
+    {
 
       netrec->flag.UpdateAvg = false;
     }
-    if (netrec->flag.FileInit){
-
+    if (netrec->flag.FileInit)
+    {
+      netrec->fileInit(fname.c_str()); // init file here
       netrec->flag.FileInit = false;
     }
-    if (netrec->flag.SendRequest){
+    if (netrec->flag.SendRequest)
+    {
 
       netrec->flag.SendRequest = false;
     }
-    if (netrec->flag.stopStream){
+    if (netrec->flag.stopStream)
+    {
 
       netrec->flag.stream = false;
       netrec->flag.stopStream = false;
     }
-    if (netrec->flag.CloseFile){
+    if (netrec->flag.CloseFile)
+    {
 
       netrec->flag.CloseFile = false;
     }
     //mutex unlock flag;
+    pthread_mutex_unlock(&mutex);
   }
   printf("Finish thread netrec! \n");
 }
