@@ -1,3 +1,4 @@
+#pragma once
 // defines here
 #ifdef _WIN32
 #include <winsock2.h>
@@ -49,6 +50,8 @@ typedef unsigned int uint32;
 typedef int int32;
 typedef unsigned short uint16;
 typedef unsigned char byte;
+#ifndef response_struct
+
 typedef struct response_struct
 { // receieved from FT, trans it to NetboxModule.
   uint32 rdt_sequence;
@@ -57,6 +60,7 @@ typedef struct response_struct
   int32 FTData[6];
   int32 FTAvg[6];
 } RESPONSE;
+#endif
 typedef struct response_flags
 { // flags mark how should the Netboxrec function do
   bool UpdateAvg;
