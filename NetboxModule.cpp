@@ -64,10 +64,11 @@ double t0, t1, t2, t3, t4;
 int i, j, k; /* Generic loop/array index. */
 bool keep_going = false;
 bool fwriting = false;
+bool fileopen = false;
 string fname;
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 FLAGS flag;
-RESPONSE forcedat; 
+RESPONSE *forcedat; 
 
 void InitializeAbsTime(void)
 {
@@ -101,86 +102,114 @@ double GetAbsTime(void)
 
 void respondRTMA(NetftRTMA *netRTMA)
 {
-  printf("Start respondRTMA function!");
+  //printf("Start respondRTMA function!");
   while (1)
   {
     //receieve Msg
     netRTMA->receive();
     //respond Msg
-    printf("G: finish receive, before lock 00 \n");
-    printf("G: finish receive, before lock 01 \n");
-    pthread_mutex_lock(&mutex);
-    printf("G: finish receive, lock, before respond\n");
-    flag = netRTMA->respond(&forcedat, flag);
+    //printf("RTMA: finish receive, before lock 00 \n");
+    //printf("RTMA: finish receive, before lock 01 \n");
+    //pthread_mutex_lock(&mutex);
+    //printf("RTMA: finish receive, lock, before respond\n");
+
+    flag = netRTMA->respond(forcedat, flag);
+
     fname = netRTMA->fname;
-    pthread_mutex_unlock(&mutex);
-    printf("end of netRTMA->respond\n");
+    //pthread_mutex_unlock(&mutex);
+    //printf("end of netRTMA->respond\n");
     if (keep_going == false)
     {
-      printf("Keep_going is %d\n", keep_going);
-      printf("enter break point. \n");
-      break;
+      //printf("Keep_going is %d\n", keep_going);
+      //printf("enter break point. \n");
+      //break;
     }
-    printf("G: end of one respondRTMA loop\n");
+    //printf("RTMA: end of one respondRTMA loop\n");
   }
-  printf("G: Finish respondRTMA function!");
+  //printf("RTMA: Finish respondRTMA function!");
 }
 
 void *processNetrec(void *arg)
 { // how to deal with argument proboem?
   Netboxrec *netrec = (Netboxrec *)arg;
-  printf("Enter thread netrec! \n");
+  //printf("Enter thread netrec! \n");
   while (1)
   {
-    printf("G: start processNetrec loop! \n");
+    //printf("NREC: start processNetrec loop! \n");
+    //printf(fileopen?"fileopen is: true\n":"fileopen is: false\n");
     // mutex_lock flag
     pthread_mutex_lock(&mutex);
-    printf("G: start processNetrec loop, lock finished! \n");
-    netrec->getforceData();
-    printf("G: start processNetrec loop, lock finished01! \n");
-    forcedat = netrec->getforceData();
+    //printf("AvgCnt:%d\n", netrec->AvgCnt); //???
+/*    try{
+    printf("NREC: start processNetrec loop, lock finished! \n");
+    printf("NREC: start processNetrec loop, lock finished01! \n");
+}
+	catch (int e){
+		cout<<"Error at processNetrec, getforceData(), id:" <<e<<endl;
+	}
+	*/
+//	try{
     if (flag.stream)
     {
-      printf("G: start streaming! ");
+      //printf("NREC: start streaming! ");
       netrec->recvstream();
       netrec->writeFile();
+      netrec->getforceData(forcedat);
     }
     if (flag.UpdateAvg)
     {
-		printf("G: flag.Updateavg! \n");
+		printf("NREC: flag.Updateavg! \n");
       flag.UpdateAvg = false;
     }
-    if (flag.FileInit)
+    if (flag.FileInit & (~fileopen))
     {
-		printf("G: flag.FileInit! \n");
-      netrec->fileInit(fname.c_str()); // init file here
+		printf("NREC: flag.FileInit! \n");
+	  fileopen = true;
+	  char filename[80];
+	  strcpy(filename, (fname.c_str()));
+      //netrec->fileInit(fname.c_str()); // init file here
+      printf("fileNameCopied!\n");
+      netrec->getforceData(forcedat);
+      printf("get force data\n");
+      netrec->fileInit(fname); 
+      netrec->sendrequest();
+      //printf(fileopen?"fileopen is: true\n":"fileopen is: false\n");
+      fileopen = true;
       flag.FileInit = false;
+      flag.stream = true;
+      //filename->clear();
     }
     if (flag.SendRequest)
     {
-		printf("G: flag.SendRequest! \n");
+		printf("NREC: flag.SendRequest! \n");
       flag.SendRequest = false;
     }
     if (flag.stopStream)
     {
-		printf("G: flag.Stopstream! \n");
+		printf("NREC: flag.Stopstream! \n");
       flag.stream = false;
       flag.stopStream = false;
     }
     if (flag.CloseFile)
     {
-		printf("G: flag.CloseFile! \n");
+		printf("NREC: flag.CloseFile! \n");
       flag.CloseFile = false;
+      fileopen = 0;
     }
     //mutex unlock flag;
+//}
+//	catch (int e){
+//		cout <<"Error at processNetrec, updateflags, id:"<<e<<endl;
+//	}
     pthread_mutex_unlock(&mutex);
-    printf("G: end processNetrec loop! \n");
+    //printf("NREC: end processNetrec loop! \n");
   }
-  printf("G: Finish thread netrec! \n");
+  printf("NREC: Finish thread netrec! \n");
 }
 
 int main(int argc, char **argv)
 {
+	forcedat = (RESPONSE*) malloc(sizeof(RESPONSE));
   NetftRTMA netRTMA(argc, argv);
   Netboxrec netrec;
   netrec.socketInit();
@@ -189,7 +218,7 @@ int main(int argc, char **argv)
   int disp_cnt = DISP_MAX_CNT;
 
   pthread_t netrec_thread;
-  pthread_create(&netrec_thread, NULL, processNetrec, NULL);
+  pthread_create(&netrec_thread, NULL, processNetrec, (void*) &netrec);
   respondRTMA(&netRTMA);
   pthread_join(netrec_thread, NULL);
   netrec.socketClose();

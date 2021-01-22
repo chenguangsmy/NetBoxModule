@@ -165,16 +165,16 @@ void NetftRTMA::updateMsg(RESPONSE *forceData)
 }
 void NetftRTMA::receive()
 {
-    printf("netRTMA: enter receieve\n");
+ //   printf("netRTMA: enter receieve\n");
     //got_msg = mod.ReadMessage(&inMsg, 0.01);
-    got_msg = mod.ReadMessage(&inMsg, 0.0);
-    printf("netRTMA: enter receieve ln 2\n");
+    got_msg = mod.ReadMessage(&inMsg, 0.05);
+//    printf("netRTMA: enter receieve ln 2\n");
     if (got_msg == true)
         flag_sent = false;
 }
 FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
 {
-    printf("netRTMA: enter respond function\n");
+//    printf("netRTMA: enter respond function\n");
     if (inMsg.msg_type == MT_MOVE_HOME)
     {
         printf("MT_MOVE_HOME: update Avg. \n");
@@ -223,6 +223,7 @@ FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
     }
     else if (inMsg.msg_type == MT_SAMPLE_GENERATED & flag_sent == false)
     {
+		//printf("netRTMA: SAMPLE_GENERATED\n");
         inMsg.GetData(&sample_gen);
         // package message here!
         updateMsg((RESPONSE *)froceData);
@@ -233,7 +234,7 @@ FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
     }
     else if (inMsg.msg_type == MT_EXIT)
     {
-        if ((inMsg.dest_mod_id == 0) || (inMsg.dest_mod_id == mod.GetModuleID()))
+/*        if ((inMsg.dest_mod_id == 0) || (inMsg.dest_mod_id == mod.GetModuleID()))
         {
             printf("got exit!\n");
             mod.SendSignal(MT_EXIT_ACK);
@@ -247,7 +248,9 @@ FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
             flag.stopStream = true;
 
             //break;
+
         }
+*/ // mute this block for testing .
     }
 
     // task conditions logic
@@ -258,11 +261,8 @@ FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
         cout << file_name << endl;
         fname = file_dir + '/' + file_name;
         cout << "fname should be" << fname << endl;
-        //netrec->fileInit(fname.c_str());  //.....!!!!!!!!!!!!!!???????
         flag.FileInit = true;
-        //netrec->sendrequest();            //.....
         flag.SendRequest = true;
-        printf("file initialized\n");
         //reset flags
         flag_sconfig = false;
         flag_xmconfig = false;
