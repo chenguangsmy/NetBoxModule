@@ -91,21 +91,25 @@ public:
   WSADATA wsaData;
   WORD wVersionRequested;
 #else
-  int socketHandle; /* Handle to UDP socket used to communicate with Net F/T. */
+  
 #endif
   struct sockaddr_in addr;            /* Address of Net F/T. */
   struct hostent *he;                 /* Host entry for Net F/T. */
   byte ft_request[8];                 /* The request data sent to the Net F/T. */
-  RESPONSE ft_resp;                   /* The structured ft_response received from the Net F/T. */
+  RESPONSE ft_resp ;                   /* The structured ft_response received from the Net F/T. */
   FLAGS flag;                         /* Command flag sending from RTMA module */
   byte ft_response[36 * NUM_SAMPLES]; /* The raw ft_response data received from the Net F/T. */
                                       // as receieve NUM_SAMPLES datapoints per batch, multiply by length per datapoints
   int i, j, k;                        /* Generic loop/array index. */
   int err;                            /* Error status of operations. */
   int32 data;                         /* temporary variable in receiving force data*/
+  int iter_i; 
   bool keep_going;
   // add a raw force, size 6*MAX_SIZE
   // add a force, size 6*MAX_SIZE
+  int AvgCnt = 0;
+private:
+  int socketHandle; /* Handle to UDP socket used to communicate with Net F/T. */
   int rdt_sequence[NUM_SAMPLES];
   int ft_sequence[NUM_SAMPLES];
   int status[NUM_SAMPLES];
@@ -113,16 +117,14 @@ public:
   double force[6 * NUM_SAMPLES];
   double TempAvgForce[6];
   double AvgForce[6];
-  int AvgCnt = 0;
-  ofstream outdata; // written file
+
+  ofstream *outdata; // written file
   std::string fname;
   const char *cstr_fname;
-
-private:
 protected:
   // functions
 public:
-  int fileInit(const char *); // set up the file writing to seperate
+  int fileInit(string); // set up the file writing to seperate
   int fileClose();      // close the file
 
   int socketInit();     // set up the socket recording from FT
@@ -135,22 +137,19 @@ public:
   int forceTransform(); // transform data (maybe from torque to force?)
   int updateAvg();      // get average through a set of data
   void writeFile();     // write data on .csv file
-  void closeFile();     // close data write stream
+  int closeFile();     // close data write stream
   void showElapse();
 
   double *getAverageforceData(); // return average force data
   int getRDT();
   int getFT();
   int getstatus();
-  RESPONSE getforceData(); 
+  void getforceData(RESPONSE*); 
 
 public:
   Netboxrec()
   {
-    printf("enter Netboxrec construction! \n");
-    *(uint16 *)&ft_request[0] = htons(0x1234);        // standard header.
-    *(uint16 *)&ft_request[2] = htons(COMMAND_BATCH); // per table 9.1 in Net F/T user manual.
-    *(uint32 *)&ft_request[4] = htonl(0);             // see section 9.1 in Net F/T user manual.
+    printf("enter Netboxrec construction! \n");    //ft_resp = (RESPONSE*) malloc(sizeof(RESPONSE));
     //...... other vars.
     keep_going = true;
     //fname = "/home/vr/rg2/data/forceSensor/" + currentDateTime() + ".dat"; // ^`___`^ not to hard code, change a directory by message!
@@ -174,6 +173,7 @@ int Netboxrec::socketInit()
 {
   // socket initialization
   socketHandle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  printf("socketHandle is: %d ", socketHandle);
   if (socketHandle == -1)
   {
     fprintf(stderr, "Socket could not be opened.\n");
@@ -205,29 +205,29 @@ int Netboxrec::socketClose()
 #endif
   return 1;
 }
-int Netboxrec::fileInit(const char fname[80])
+int Netboxrec::fileInit(string fname)
 {
-  //cstr_fname = fname.c_str();
-  //printf("fname is: %s", cstr_fname);
-  //outdata.open(cstr_fname);
-  printf("fname is: %s", fname);
-  outdata.open(fname);
-  outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
+
+  printf("fname is: %s", fname.c_str());
+  outdata = new ofstream;
+  outdata->open((const char*) fname.c_str());
+  *outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
   printf("try another line \n");
-  outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
+  return 1;
 }
 int Netboxrec::sendrequest()
 {
-	printf("enter sendrequest\n");
+	*(uint16 *)&ft_request[0] = htons(0x1234);        // standard header.
+    *(uint16 *)&ft_request[2] = htons(COMMAND_BATCH); // per table 9.1 in Net F/T user manual.
+    *(uint32 *)&ft_request[4] = htonl(0);             // see section 9.1 in Net F/T user manual.
+
 	// should try this line!
   send(socketHandle, (const char *)ft_request, 8, 0); //*** get a bunch of data, and read manual of netbox. //-> should move into the response of start session.
-	printf("finished sendrequest\n");
 }
 int Netboxrec::recvstream()
 {
-  printf("recv stream!   ");
   recv(socketHandle, (char *)ft_response, 36 * NUM_SAMPLES, 0); //*** get information from sensor
-  printf("start tidy files! \n");
+//  printf("start tidy files! \n");
   for (i = 0; i < NUM_SAMPLES; i++)
   {
     rdt_sequence[i] = ntohl(*(uint32 *)&ft_response[i * 36 + 0]);
@@ -244,6 +244,7 @@ int Netboxrec::recvstream()
     }
   }
   // copy data into resp
+
   ft_resp.rdt_sequence = rdt_sequence[NUM_SAMPLES-1];
   ft_resp.ft_sequence = ft_sequence[NUM_SAMPLES-1];
   ft_resp.status = status[NUM_SAMPLES-1];
@@ -251,7 +252,9 @@ int Netboxrec::recvstream()
     ft_resp.FTData[i] = force[(NUM_SAMPLES-1)*6 + i];
     ft_resp.FTAvg[i] = AvgForce[j];
   }
+
 }
+
 int Netboxrec::updateAvg()
 {
   for (i = 0; i < 6; i++)
@@ -272,26 +275,28 @@ int Netboxrec::updateAvg()
 }
 void Netboxrec::writeFile()
 {
-  printf("write file! \n");
+  // printf("write file! \n");
   for (i = 0; i < NUM_SAMPLES; i++) // according to header sequence
   {
-    outdata << rdt_sequence[i] << ","; //RDT seq
-    outdata << ft_sequence[i] << ",";  //F/T seq
-    outdata << status[i] << ",";       //status
+    *outdata << rdt_sequence[i] << ","; //RDT seq
+    *outdata << ft_sequence[i] << ",";  //F/T seq
+    *outdata << status[i] << ",";       //status
     for (j = 0; j < 6; j++)
     {
-      outdata << force[i * 6 + j] << ",";
+      *outdata << force[i * 6 + j] << ",";
     }
     for (j = 0; j < 6; j++)
     {
-      outdata << AvgForce[j] << ",";
+      *outdata << AvgForce[j] << ",";
     }
-    outdata << endl; //elapse
+    *outdata << endl; //elapse
   }
 }
-void Netboxrec::closeFile()
+int Netboxrec::closeFile()
 {
-  outdata.close(); //close file
+	outdata = new ofstream;
+  outdata->close(); //close file
+  return 1;
 }
 void Netboxrec::stopStream()
 {
@@ -379,6 +384,9 @@ void Netboxrec::showElapse()
   */
 }
 
-RESPONSE Netboxrec::getforceData(){
-	return ft_resp;
+//RESPONSE * Netboxrec::getforceData(){
+void Netboxrec::getforceData(RESPONSE* forcedat){
+	// to *forcedat = *ft_resp;
+	memcpy((void*) forcedat, (void*) &ft_resp, sizeof(RESPONSE));
+//	return ft_resp;
 }
