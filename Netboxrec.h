@@ -118,7 +118,7 @@ private:
   double TempAvgForce[6];
   double AvgForce[6];
 
-  ofstream *outdata; // written file
+  ofstream outdata; // written file
   std::string fname;
   const char *cstr_fname;
 protected:
@@ -131,7 +131,7 @@ public:
   int socketClose();    // close the socket and stop recording
   int sendrequest();    // sending request starting streaming recording
   int recvstream();     // receive the data from FT
-  void stopStream();    // stop stream of reading
+  int stopStream();    // stop stream of reading
   void operate();       // while function locates here
   void display();       // display the recorded data .../tobedone
   int forceTransform(); // transform data (maybe from torque to force?)
@@ -209,9 +209,9 @@ int Netboxrec::fileInit(string fname)
 {
 
   printf("fname is: %s", fname.c_str());
-  outdata = new ofstream;
-  outdata->open((const char*) fname.c_str());
-  *outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
+  //outdata = new ofstream;
+  outdata.open((const char*) fname.c_str());
+  outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
   printf("try another line \n");
   return 1;
 }
@@ -278,30 +278,31 @@ void Netboxrec::writeFile()
   // printf("write file! \n");
   for (i = 0; i < NUM_SAMPLES; i++) // according to header sequence
   {
-    *outdata << rdt_sequence[i] << ","; //RDT seq
-    *outdata << ft_sequence[i] << ",";  //F/T seq
-    *outdata << status[i] << ",";       //status
+    outdata << rdt_sequence[i] << ","; //RDT seq
+    outdata << ft_sequence[i] << ",";  //F/T seq
+    outdata << status[i] << ",";       //status
     for (j = 0; j < 6; j++)
     {
-      *outdata << force[i * 6 + j] << ",";
+      outdata << force[i * 6 + j] << ",";
     }
     for (j = 0; j < 6; j++)
     {
-      *outdata << AvgForce[j] << ",";
+      outdata << AvgForce[j] << ",";
     }
-    *outdata << endl; //elapse
+    outdata << endl; //elapse
   }
 }
 int Netboxrec::closeFile()
 {
-	outdata = new ofstream;
-  outdata->close(); //close file
+	//outdata = new ofstream;
+  outdata.close(); //close file
   return 1;
 }
-void Netboxrec::stopStream()
+int Netboxrec::stopStream()
 {
   *(uint16 *)&ft_request[2] = htons(COMMAND_STOP);
   send(socketHandle, (const char *)ft_request, 8, 0);
+  return 1;
 }
 void Netboxrec::operate()
 {
