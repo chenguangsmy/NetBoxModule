@@ -95,7 +95,7 @@ public:
 public:
     NetftRTMA(int argc, char **argv) : argc(argc), argv(argv)
     {
-        printf("entered NetftRTMA construction!\n");
+        printf("NetftRTMA construction!\n");
         // variables
         got_msg = false;
         flag_sconfig = false;
@@ -132,7 +132,6 @@ public:
         mod.Subscribe(MT_SESSION_CONFIG);
         mod.Subscribe(MT_XM_START_SESSION);
 
-        //keep_going = true;
     }
 
     // deconstruction;
@@ -144,7 +143,6 @@ public:
 void NetftRTMA::updateMsg(RESPONSE forceData)
 {
     // only package the first message in a set of NUM_SAMPLES
-    // ** dangerous here! alter to mutex_lock and unlock, besides, use a structure!
     raw_force_data.sample_header = sample_gen.sample_header;
     force_data.sample_header = sample_gen.sample_header;
     // set these variables private and visit them using function
@@ -170,8 +168,9 @@ void NetftRTMA::receive()
 {
     got_msg = mod.ReadMessage(&inMsg, 0.05);
     if (got_msg == true)
-        flag_sent = false;
+        flag_sent = false; //flag mark if a message have been sent
 }
+/*
 FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
 {
 //    printf("netRTMA: enter respond function\n");
@@ -271,9 +270,9 @@ FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
     return flag;
 }
 
+*/
 void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 {
-//    printf("netRTMA: enter respond function\n");
     if (inMsg.msg_type == MT_MOVE_HOME)
     {
         printf("MT_MOVE_HOME: update Avg. \n");
@@ -340,7 +339,9 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
             mod.SendSignal(MT_EXIT_ACK);
             mod.DisconnectFromMMM();
             //keep_going = false;
-			netrec->stopStream();
+			netrec->setStreamStop(); // no longer stream, influencde the next thread
+            netrec->stopStream();   // sending signal of stop stream
+            
 			netrec->closeFile();
             //break;
 

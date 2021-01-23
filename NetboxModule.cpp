@@ -103,18 +103,22 @@ double GetAbsTime(void)
 //void *respondRTMA(void *arg)
 void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
 {
-  //NetftRTMA *netRTMA = (NetftRTMA*) arg; 
-	
-  //printf("Start respondRTMA function!");
   while (netRTMA->flag_exit == false)
   {
     //receieve Msg
     netRTMA->receive();
     //pthread_mutex_lock(&mutex);
+    // respond with certain netrec fuctions, including:
+    //    sendrequestStart();
+    //    sendrequestStop();
+    //    filInit(fname);   //init a file
+    //    setStreamStart(); //set a flag for stream loop as true;
+    //    setStreamStop()
+    //    fileClose();      // close the wrote file
     //flag = netRTMA->respond(forcedat, flag);
     netRTMA->respondr(forcedat, netrec);
 
-    fname = netRTMA->fname;
+    fname = netRTMA->fname;//?????
     //pthread_mutex_unlock(&mutex);
     //printf("end of netRTMA->respond\n");
     if (netRTMA->flag_exit == true)
@@ -137,7 +141,7 @@ void *processNetrec(void *arg)
     // mutex_lock flag
     //pthread_mutex_lock(&mutex);
 
-    if (flag.stream)
+    if (netrec->getStreamStatus()) // if true, start stream; 
     {
       //printf("NREC: start streaming! ");
       netrec->recvstream();
@@ -164,14 +168,14 @@ void *processNetrec(void *arg)
     {
 		printf("NREC: flag.SendRequest! \n");
       flag.SendRequest = false;
-      //netrec->sendrequest();
+      //netrec->sendRequestStart();
     }
     if (flag.stopStream)
     {
 	  printf("NREC: flag.Stopstream! \n");
       flag.stream = false;
       flag.stopStream = false;
-      //netrec->stopStream();
+      //netrec->sendRequestStop();
     }
     if (flag.CloseFile)
     {
@@ -183,6 +187,27 @@ void *processNetrec(void *arg)
 
     //pthread_mutex_unlock(&mutex);
     //printf("NREC: end processNetrec loop! \n");
+  }
+  printf("NREC: Finish thread netrec! \n");
+}
+
+void *processNetrec_noflag(void *arg)
+{ // how to deal with argument proboem?
+  Netboxrec *netrec = (Netboxrec *)arg;
+  //printf("Enter thread netrec! \n");
+  while (1) // how could I exit this part? set flags?
+  {
+    // mutex_lock flag
+    //pthread_mutex_lock(&mutex);
+    if (netrec->getStreamStatus()) // if true, start stream; 
+    {
+      netrec->recvstream();
+      netrec->writeFile();
+      netrec->getforceData(forcedat); //Debug: check if the forcedat have been copied correctly!
+                                      // both main thread and netrec visit this forcedat, Lock here?
+    }
+    // ...ToDo: consider waiy to exit. 
+    //pthread_mutex_unlock(&mutex);
   }
   printf("NREC: Finish thread netrec! \n");
 }
@@ -203,7 +228,7 @@ int main(int argc, char **argv)
   //pthread_create(&rtma_thread, NULL, respondRTMA, (void*) &netRTMA); 
 
   respondRTMA(&netRTMA, &netrec);
-    pthread_join(netrec_thread, NULL);
+  pthread_join(netrec_thread, NULL);
   //pthread_join(rtma_thread, NULL);
   netrec.socketClose();
   return 0;

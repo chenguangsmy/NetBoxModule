@@ -109,6 +109,7 @@ public:
   // add a force, size 6*MAX_SIZE
   int AvgCnt = 0;
 private:
+  bool stream_status; 
   int socketHandle; /* Handle to UDP socket used to communicate with Net F/T. */
   int rdt_sequence[NUM_SAMPLES];
   int ft_sequence[NUM_SAMPLES];
@@ -124,36 +125,39 @@ private:
 protected:
   // functions
 public:
-  int fileInit(string); // set up the file writing to seperate
-  int fileClose();      // close the file
+  int   fileInit(string); // set up the file writing to seperate
+  int   fileClose();      // close the file
 
-  int socketInit();     // set up the socket recording from FT
-  int socketClose();    // close the socket and stop recording
-  int sendrequest();    // sending request starting streaming recording
-  int recvstream();     // receive the data from FT
-  int stopStream();    // stop stream of reading
-  void operate();       // while function locates here
-  void display();       // display the recorded data .../tobedone
-  int forceTransform(); // transform data (maybe from torque to force?)
-  int updateAvg();      // get average through a set of data
-  void writeFile();     // write data on .csv file
-  int closeFile();     // close data write stream
-  void showElapse();
+  int   socketInit();     // set up the socket recording from FT
+  int   socketClose();    // close the socket and stop recording
+  int   sendRequestStart();    // sending request starting streaming recording
+  int   setStreamStart(); // set internal variable stream_status true;
+  int   setStreamStop();  // set internal variable stream_status false;
+  bool  getStreamStatus(); // return stream_status;
+  int   recvStream();     // receive the data from FT
+  int   sendRequestStop();    // stop stream of reading
+  void  operate();       // while function locates here
+  void  display();       // display the recorded data .../tobedone
+  int   forceTransform(); // transform data (maybe from torque to force?)
+  int   updateAvg();      // get average through a set of data
+  void  writeFile();     // write data on .csv file
+  int   closeFile();     // close data write stream
+  void  showElapse();
 
   double *getAverageforceData(); // return average force data
-  int getRDT();
-  int getFT();
-  int getstatus();
-  void getforceData(RESPONSE*); 
+  int   getRDT();
+  int   getFT();
+  int   getstatus();
+  void  getforceData(RESPONSE*); 
 
 public:
   Netboxrec()
   {
     printf("enter Netboxrec construction! \n");    //ft_resp = (RESPONSE*) malloc(sizeof(RESPONSE));
-    //...... other vars.
-    keep_going = true;
-    //fname = "/home/vr/rg2/data/forceSensor/" + currentDateTime() + ".dat"; // ^`___`^ not to hard code, change a directory by message!
+    // set initial values of some vars.
     // how to limit the file size? ask! Em
+    keep_going = true;
+    stream_status = false;
     for (i = 0; i < 6; i++)
     {
       TempAvgForce[i] = 0;
@@ -168,7 +172,20 @@ public:
     // .... delete other un-related vars
   }
 };
-
+int Netboxrec::setStreamStart()
+{
+  stream_status = true;
+  return 1;
+}
+int Netboxrec::setStreamStop()
+{
+  stream_status = false;
+  return 1;
+}
+bool Netboxrec::getStreamStatus()
+{
+  return stream_status;
+}
 int Netboxrec::socketInit()
 {
   // socket initialization
@@ -211,23 +228,23 @@ int Netboxrec::fileInit(string fname)
   printf("fname is: %s", fname.c_str());
   //outdata = new ofstream;
   outdata.open((const char*) fname.c_str());
+  // the head of form should be the same with writing sequence in writeFile()
   outdata << "RDT,FT,status,Fx,Fy,Fz,Tx,Ty,Tz,Fx0,Fy0,Fz0,Tx0,Ty0,Tz0,elapse" << endl;
   printf("try another line \n");
   return 1;
 }
-int Netboxrec::sendrequest()
+int Netboxrec::sendRequestStart()
 {
 	*(uint16 *)&ft_request[0] = htons(0x1234);        // standard header.
-    *(uint16 *)&ft_request[2] = htons(COMMAND_BATCH); // per table 9.1 in Net F/T user manual.
-    *(uint32 *)&ft_request[4] = htonl(0);             // see section 9.1 in Net F/T user manual.
-
-	// should try this line!
+  *(uint16 *)&ft_request[2] = htons(COMMAND_BATCH); // per table 9.1 in Net F/T user manual.
+  *(uint32 *)&ft_request[4] = htonl(0);             // see section 9.1 in Net F/T user manual.
+  
   send(socketHandle, (const char *)ft_request, 8, 0); //*** get a bunch of data, and read manual of netbox. //-> should move into the response of start session.
 }
-int Netboxrec::recvstream()
+int Netboxrec::recvStream()
 {
   recv(socketHandle, (char *)ft_response, 36 * NUM_SAMPLES, 0); //*** get information from sensor
-//  printf("start tidy files! \n");
+
   for (i = 0; i < NUM_SAMPLES; i++)
   {
     rdt_sequence[i] = ntohl(*(uint32 *)&ft_response[i * 36 + 0]);
@@ -244,7 +261,7 @@ int Netboxrec::recvstream()
     }
   }
   // copy data into resp
-
+  // ...Todo: deal with the elapse! 
   ft_resp.rdt_sequence = rdt_sequence[NUM_SAMPLES-1];
   ft_resp.ft_sequence = ft_sequence[NUM_SAMPLES-1];
   ft_resp.status = status[NUM_SAMPLES-1];
@@ -254,7 +271,6 @@ int Netboxrec::recvstream()
   }
 
 }
-
 int Netboxrec::updateAvg()
 {
   for (i = 0; i < 6; i++)
@@ -289,7 +305,8 @@ void Netboxrec::writeFile()
     {
       outdata << AvgForce[j] << ",";
     }
-    outdata << endl; //elapse
+    // ...Todo: add elipse here!
+    outdata << endl; 
   }
 }
 int Netboxrec::closeFile()
@@ -298,17 +315,16 @@ int Netboxrec::closeFile()
   outdata.close(); //close file
   return 1;
 }
-int Netboxrec::stopStream()
+int Netboxrec::sendRequestStop()
 {
   *(uint16 *)&ft_request[2] = htons(COMMAND_STOP);
   send(socketHandle, (const char *)ft_request, 8, 0);
   return 1;
 }
-void Netboxrec::operate()
-{
-  // need a while loop here
-  recvstream();
-  writeFile();
+void Netboxrec::getforceData(RESPONSE* forcedat){
+	// to *forcedat = *ft_resp;
+	memcpy((void*) forcedat, (void*) &ft_resp, sizeof(RESPONSE));
+//	return ft_resp;
 }
 int Netboxrec::forceTransform()
 {
@@ -385,9 +401,9 @@ void Netboxrec::showElapse()
   */
 }
 
-//RESPONSE * Netboxrec::getforceData(){
-void Netboxrec::getforceData(RESPONSE* forcedat){
-	// to *forcedat = *ft_resp;
-	memcpy((void*) forcedat, (void*) &ft_resp, sizeof(RESPONSE));
-//	return ft_resp;
+void Netboxrec::operate()
+{
+  // need a while loop here
+  recvStream();
+  writeFile();
 }
