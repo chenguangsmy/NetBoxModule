@@ -62,7 +62,7 @@ double tot_elapsed = 0.0;
 double max_elapsed = 0.0;
 double t0, t1, t2, t3, t4;
 int i, j, k; /* Generic loop/array index. */
-bool keep_going = false;
+bool keep_going = true;
 bool fwriting = false;
 bool fileopen = false;
 string fname;
@@ -117,14 +117,17 @@ void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
     //    fileClose();      // close the wrote file
     //flag = netRTMA->respond(forcedat, flag);
     netRTMA->respondr(forcedat, netrec);
-
-    fname = netRTMA->fname;//?????
+    // Cannot guarentee if the same data would send twice, as these two is not in the same thread. 
+    //  Or need to add additional flags to compensate.  
     //pthread_mutex_unlock(&mutex);
     //printf("end of netRTMA->respond\n");
-    if (netRTMA->flag_exit == true)
+    if (netRTMA->flag_exit == false)
     {
-      //printf("Keep_going is %d\n", keep_going);
-      //printf("enter break point. \n");
+      keep_going = true;
+    }
+    else
+    {
+      keep_going = false;
       break;
     }
     //printf("RTMA: end of one respondRTMA loop\n");
@@ -132,10 +135,10 @@ void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
   printf("RTMA: Finish respondRTMA function!");
 }
 
-void *processNetrec(void *arg)
-{ // how to deal with argument proboem?
+void *processNetrec(void *arg) // not using this now
+{ 
   Netboxrec *netrec = (Netboxrec *)arg;
-  //printf("Enter thread netrec! \n");
+  printf("Enter thread netrec! \n");
   while (1)
   {
     // mutex_lock flag
@@ -156,9 +159,7 @@ void *processNetrec(void *arg)
     }
     if (flag.FileInit & (~fileopen))
     {
-	  printf("NREC: flag.FileInit! \n");
-	  fileopen = true;
-      //netrec->fileInit(fname);
+	    printf("NREC: flag.FileInit! \n");
       fileopen = true;
       flag.FileInit = false;
       flag.stream = true;
@@ -192,22 +193,26 @@ void *processNetrec(void *arg)
 }
 
 void *processNetrec_noflag(void *arg)
-{ // how to deal with argument proboem?
+{ 
   Netboxrec *netrec = (Netboxrec *)arg;
-  //printf("Enter thread netrec! \n");
-  while (1) // how could I exit this part? set flags?
+  while (keep_going) 
   {
     // mutex_lock flag
-    //pthread_mutex_lock(&mutex);
+    
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
       netrec->recvstream();
       netrec->writeFile();
+      pthread_mutex_lock(&mutex);
       netrec->getforceData(forcedat); //Debug: check if the forcedat have been copied correctly!
                                       // both main thread and netrec visit this forcedat, Lock here?
+      pthread_mutex_unlock(&mutex);
     }
-    // ...ToDo: consider waiy to exit. 
-    //pthread_mutex_unlock(&mutex);
+    if (!keep_going)
+    { 
+      break;
+    }
+    
   }
   printf("NREC: Finish thread netrec! \n");
 }
@@ -223,7 +228,7 @@ int main(int argc, char **argv)
   int disp_cnt = DISP_MAX_CNT;
 
   pthread_t netrec_thread;
-  pthread_t rtma_thread;
+  //pthread_t rtma_thread;
   pthread_create(&netrec_thread, NULL, processNetrec, (void*) &netrec);
   //pthread_create(&rtma_thread, NULL, respondRTMA, (void*) &netRTMA); 
 

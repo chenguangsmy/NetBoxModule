@@ -80,18 +80,14 @@ protected:
     int argc;
     char **argv;
     int i,j;
-    // functions;
 public:
     bool flag_exit;
-    // connectTo();
     void receive();
     FLAGS respond(RESPONSE *, FLAGS);
     void updateMsg(RESPONSE );
     void respondr(RESPONSE *, Netboxrec *);
-    //
     //private:
     //protected:
-    // construction;
 public:
     NetftRTMA(int argc, char **argv) : argc(argc), argv(argv)
     {

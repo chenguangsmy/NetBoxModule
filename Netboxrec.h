@@ -269,7 +269,6 @@ int Netboxrec::recvStream()
     ft_resp.FTData[i] = force[(NUM_SAMPLES-1)*6 + i];
     ft_resp.FTAvg[i] = AvgForce[j];
   }
-
 }
 int Netboxrec::updateAvg()
 {
