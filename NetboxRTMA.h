@@ -336,7 +336,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
             mod.DisconnectFromMMM();
             //keep_going = false;
 			netrec->setStreamStop(); // no longer stream, influencde the next thread
-            netrec->stopStream();   // sending signal of stop stream
+            netrec->sendRequestStop();   // sending signal of stop stream
             
 			netrec->closeFile();
             //break;
@@ -355,7 +355,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 
         netrec->fileInit(fname);
 
-        netrec->sendrequest();
+        netrec->sendRequestStart();
         //reset flags
         flag_sconfig = false;
         flag_xmconfig = false;

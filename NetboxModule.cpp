@@ -147,7 +147,7 @@ void *processNetrec(void *arg) // not using this now
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
       //printf("NREC: start streaming! ");
-      netrec->recvstream();
+      netrec->recvStream();
       netrec->writeFile();
       netrec->getforceData(forcedat);
     }
@@ -201,7 +201,7 @@ void *processNetrec_noflag(void *arg)
     
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
-      netrec->recvstream();
+      netrec->recvStream();
       netrec->writeFile();
       pthread_mutex_lock(&mutex);
       netrec->getforceData(forcedat); //Debug: check if the forcedat have been copied correctly!
@@ -229,7 +229,7 @@ int main(int argc, char **argv)
 
   pthread_t netrec_thread;
   //pthread_t rtma_thread;
-  pthread_create(&netrec_thread, NULL, processNetrec, (void*) &netrec);
+  pthread_create(&netrec_thread, NULL, processNetrec_noflag, (void*) &netrec);
   //pthread_create(&rtma_thread, NULL, respondRTMA, (void*) &netRTMA); 
 
   respondRTMA(&netRTMA, &netrec);
