@@ -146,10 +146,11 @@ void *processNetrec(void *arg) // not using this now
 
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
-      //printf("NREC: start streaming! ");
+      printf("Streaming: ");
       netrec->recvStream();
       netrec->writeFile();
       netrec->getforceData(forcedat);
+      printf("\n");
     }
     if (flag.UpdateAvg)
     {
@@ -201,6 +202,8 @@ void *processNetrec_noflag(void *arg)
     
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
+	  flag.stream = false;
+	  flag.stream = true;
       netrec->recvStream();
       netrec->writeFile();
       pthread_mutex_lock(&mutex);

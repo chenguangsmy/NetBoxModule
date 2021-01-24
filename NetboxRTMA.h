@@ -89,7 +89,8 @@ public:
     //private:
     //protected:
 public:
-    NetftRTMA(int argc, char **argv) : argc(argc), argv(argv)
+    NetftRTMA(int argc, char **argv) : argc(argc), argv(argv),
+        ForceSensorDataMsg(MT_FORCE_SENSOR_DATA), RawForceSensorDataMsg(MT_RAW_FORCE_SENSOR_DATA)
     {
         printf("NetftRTMA construction!\n");
         // variables
@@ -98,8 +99,15 @@ public:
         flag_xmconfig = false;
         flag_sent = true;
         flag_exit = false;
-        ForceSensorDataMsg = MT_FORCE_SENSOR_DATA;
-        RawForceSensorDataMsg = MT_RAW_FORCE_SENSOR_DATA;
+        //ForceSensorDataMsg = MT_FORCE_SENSOR_DATA;
+        //RawForceSensorDataMsg = MT_RAW_FORCE_SENSOR_DATA;
+        //RawForceSensorDataMsg = AllocateData(sizeof(MDF_RAW_FORCE_SENSOR_DATA));
+        //raw_force_data = (MDF_RAW_FORCE_SENSOR_DATA*) RawForceSensorDataMsg.GetDataPointer();
+        
+        //ForceSensorDataMsg = AllocateData(sizeof(MDF_FORCE_SENSOR_DATA));
+        //force_data = (MDF_FORCE_SENSOR_DATA*) ForceSensorDataMsg.GetDataPointer();
+        
+
         //functions
         if (argc < 2)
         {
@@ -159,12 +167,16 @@ void NetftRTMA::updateMsg(RESPONSE forceData)
     {
         raw_force_data.data[j] = force_data.data[j] + force_data.offset[j];
     }
+    // set data
+    RawForceSensorDataMsg.SetData(&raw_force_data, sizeof(raw_force_data));
+    ForceSensorDataMsg.SetData(&force_data, sizeof(force_data));
 }
 void NetftRTMA::receive()
 {
     got_msg = mod.ReadMessage(&inMsg, 0.05);
     if (got_msg == true)
         flag_sent = false; //flag mark if a message have been sent
+        //printf("flagSet, Enable sendint SAMPLE\n");
 }
 /*
 FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
@@ -321,7 +333,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
         inMsg.GetData(&sample_gen);
         // package message here!
         updateMsg(*froceData); //..? how to convert forceData into message?
-        //printf("        send data! \n");
+        printf("SAMPLE_GENERATED: Send Force Data %03d to %03d \n", froceData->rdt_sequence, force_data.rdt_sequence);
         mod.SendMessage(&RawForceSensorDataMsg);
         mod.SendMessage(&ForceSensorDataMsg);
         flag_sent == true;
@@ -359,6 +371,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
         //reset flags
         flag_sconfig = false;
         flag_xmconfig = false;
+        netrec->setStreamStart(); 
         //fwriting = true;
     }
     //  cout<<"end of NetftRTMA::respond"<<endl;
