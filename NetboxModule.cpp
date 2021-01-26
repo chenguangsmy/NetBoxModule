@@ -78,27 +78,6 @@ void InitializeAbsTime(void)
   win_counter_freq = (double)freq;
 #endif
 }
-double GetAbsTime(void)
-{
-  //WIN: returns a seconds timestamp from a system counter
-
-#ifdef _UNIX_C
-  struct timeval tim;
-  if (gettimeofday(&tim, NULL) == 0)
-  {
-    double t = tim.tv_sec + (tim.tv_usec / 1000000.0);
-    return t;
-  }
-  else
-  {
-    return 0.0;
-  }
-#else
-  LONGLONG current_time;
-  QueryPerformanceCounter((LARGE_INTEGER *)&current_time);
-  return (double)current_time / win_counter_freq;
-#endif
-}
 
 void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
 {

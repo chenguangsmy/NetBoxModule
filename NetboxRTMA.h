@@ -144,6 +144,7 @@ void NetftRTMA::updateMsg(RESPONSE forceData)
     raw_force_data.rdt_sequence = forceData.rdt_sequence;
     raw_force_data.ft_sequence = forceData.ft_sequence;
     raw_force_data.status = forceData.status;
+    forceData.time = forceData.time; 
     for (j = 0; j < 6; j++)
     {
         force_data.data[j] = forceData.FTData[j];
@@ -153,6 +154,7 @@ void NetftRTMA::updateMsg(RESPONSE forceData)
     force_data.rdt_sequence = raw_force_data.rdt_sequence;
     force_data.ft_sequence = raw_force_data.ft_sequence;
     force_data.status = raw_force_data.status;
+    force_data.time = raw_force_data.time;
     for (j = 0; j < 6; j++)
     {
         raw_force_data.data[j] = force_data.data[j] + force_data.offset[j];

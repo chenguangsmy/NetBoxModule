@@ -59,6 +59,7 @@ typedef struct response_struct
   uint32 status;
   int32 FTData[6];
   int32 FTAvg[6];
+  double time;
 } RESPONSE;
 #endif
 typedef struct response_flags
@@ -80,6 +81,27 @@ const std::string currentDateTime()
   tstruct = *localtime(&now);
   strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", &tstruct);
   return buf;
+}
+double GetAbsTime(void)
+{
+  //WIN: returns a seconds timestamp from a system counter
+
+#ifdef _UNIX_C
+  struct timeval tim;
+  if (gettimeofday(&tim, NULL) == 0)
+  {
+    double t = tim.tv_sec + (tim.tv_usec / 1000000.0);
+    return t;
+  }
+  else
+  {
+    return 0.0;
+  }
+#else
+  LONGLONG current_time;
+  QueryPerformanceCounter((LARGE_INTEGER *)&current_time);
+  return (double)current_time / win_counter_freq;
+#endif
 }
 
 class Netboxrec
@@ -116,6 +138,7 @@ private:
   int status[NUM_SAMPLES];
   double raw_force[6 * NUM_SAMPLES];
   double force[6 * NUM_SAMPLES];
+  double time[NUM_SAMPLES];
   double TempAvgForce[6];
   double AvgForce[6];
 
@@ -259,6 +282,7 @@ int Netboxrec::recvStream()
     {
       force[i * 6 + j] = raw_force[i * 6 + j] - AvgForce[j];
     }
+    time[i] = GetAbsTime();
   }
   // copy data into resp
   // ...Todo: deal with the elapse! 
@@ -269,6 +293,7 @@ int Netboxrec::recvStream()
     ft_resp.FTData[i] = force[(NUM_SAMPLES-1)*6 + i];
     ft_resp.FTAvg[i] = AvgForce[j];
   }
+  ft_resp.time = time[NUM_SAMPLES-1];
 }
 int Netboxrec::updateAvg()
 {
@@ -305,6 +330,7 @@ void Netboxrec::writeFile()
       outdata << AvgForce[j] << ",";
     }
     // ...Todo: add elipse here!
+    outdata << time[i]; // receieve time
     outdata << endl; 
   }
 }
