@@ -99,15 +99,6 @@ public:
         flag_xmconfig = false;
         flag_sent = true;
         flag_exit = false;
-        //ForceSensorDataMsg = MT_FORCE_SENSOR_DATA;
-        //RawForceSensorDataMsg = MT_RAW_FORCE_SENSOR_DATA;
-        //RawForceSensorDataMsg = AllocateData(sizeof(MDF_RAW_FORCE_SENSOR_DATA));
-        //raw_force_data = (MDF_RAW_FORCE_SENSOR_DATA*) RawForceSensorDataMsg.GetDataPointer();
-        
-        //ForceSensorDataMsg = AllocateData(sizeof(MDF_FORCE_SENSOR_DATA));
-        //force_data = (MDF_FORCE_SENSOR_DATA*) ForceSensorDataMsg.GetDataPointer();
-        
-
         //functions
         if (argc < 2)
         {
@@ -135,7 +126,6 @@ public:
         mod.Subscribe(MT_MOVE_HOME);
         mod.Subscribe(MT_SESSION_CONFIG);
         mod.Subscribe(MT_XM_START_SESSION);
-
     }
 
     // deconstruction;
@@ -178,107 +168,7 @@ void NetftRTMA::receive()
         flag_sent = false; //flag mark if a message have been sent
         //printf("flagSet, Enable sendint SAMPLE\n");
 }
-/*
-FLAGS NetftRTMA::respond(RESPONSE *froceData, FLAGS flag)
-{
-//    printf("netRTMA: enter respond function\n");
-    if (inMsg.msg_type == MT_MOVE_HOME)
-    {
-        printf("MT_MOVE_HOME: update Avg. \n");
-        flag.UpdateAvg = true;
-        inMsg.GetData(&tsc);
-    }
-    else if (inMsg.msg_type == MT_SESSION_CONFIG)
-    {
-        printf("MT_SESSION_CONFIG. \n");
-        inMsg.GetData(&ssconfig);
-        strcpy(data_dir, ssconfig.data_dir);
-        file_dir = data_dir;
-        flag_sconfig = true;
-    }
-    else if (inMsg.msg_type == MT_XM_START_SESSION)
-    {
-        printf("MT_XM_START_SESSION receieved! \n");
-        inMsg.GetData(&stsession);
-        strcpy(subject_name, stsession.subject_name);
-        session_num = stsession.calib_session_id;
-        sprintf(file_name, "%s%d.csv", subject_name, session_num);
-        cout << "filename: " << file_name << endl;
-        flag_xmconfig = true;
-    }
-    else if (inMsg.msg_type == MT_PING)
-    {
-        cout << "ping sent" << endl;
-        char MODULE_NAME[] = "NetboxModule";
-        MDF_PING *pg = (MDF_PING *)inMsg.GetDataPointer();
-        if ((strcasecmp(pg->module_name, MODULE_NAME) == 0) ||
-            (strcasecmp(pg->module_name, "*") == 0) ||
-            (inMsg.dest_mod_id == mod.GetModuleID()))
-        {
-            CMessage PingAckMessage(MT_PING_ACK);
-            PingAckMessage.AllocateData(sizeof(MDF_PING_ACK));
-            MDF_PING_ACK *pa = (MDF_PING_ACK *)PingAckMessage.GetDataPointer();
 
-            memset(pa, 0, sizeof(MDF_PING_ACK));
-            for (i = 0; i < strlen(MODULE_NAME); i++)
-            {
-                pa->module_name[i] = MODULE_NAME[i];
-            }
-            cout << "ping ack" << endl;
-            mod.SendMessage(&PingAckMessage);
-        }
-    }
-    else if (inMsg.msg_type == MT_SAMPLE_GENERATED & flag_sent == false)
-    {
-		//printf("netRTMA: SAMPLE_GENERATED\n");
-        inMsg.GetData(&sample_gen);
-        // package message here!
-        updateMsg(*froceData); //..? how to convert forceData into message?
-        //printf("        send data! \n");
-        mod.SendMessage(&RawForceSensorDataMsg);
-        mod.SendMessage(&ForceSensorDataMsg);
-        flag_sent == true;
-    }
-    else if (inMsg.msg_type == MT_EXIT)
-    {
-        if ((inMsg.dest_mod_id == 0) || (inMsg.dest_mod_id == mod.GetModuleID()))
-        {
-            printf("got exit!\n");
-            mod.SendSignal(MT_EXIT_ACK);
-            mod.DisconnectFromMMM();
-            //keep_going = false;
-            flag.stream = false;
-            usleep(100);
-			flag.stopStream = true; //first stop, then close
-			usleep(100);
-            //fwriting = false;
-			flag.CloseFile = true;
-
-            //break;
-
-        }
-    }
-
-    // task conditions logic
-    if (flag_sconfig & flag_xmconfig)
-    { //not writing file, but receieved config, open file
-        // concern: if a session has longer (more than a session), will this still work?
-        printf("before enter fileInit()\n");
-        cout << file_name << endl;
-        fname = file_dir + '/' + file_name;
-        cout << "fname should be" << fname << endl;
-        flag.FileInit = true;
-        flag.SendRequest = true;
-        //reset flags
-        flag_sconfig = false;
-        flag_xmconfig = false;
-        //fwriting = true;
-    }
-    //  cout<<"end of NetftRTMA::respond"<<endl;
-    return flag;
-}
-
-*/
 void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 {
     if (inMsg.msg_type == MT_MOVE_HOME)
@@ -329,10 +219,9 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
     }
     else if (inMsg.msg_type == MT_SAMPLE_GENERATED & flag_sent == false)
     {
-		//printf("netRTMA: SAMPLE_GENERATED\n");
         inMsg.GetData(&sample_gen);
-        // package message here!
-        updateMsg(*froceData); //..? how to convert forceData into message?
+        // package message, each struct element to message.
+        updateMsg(*froceData); 
         printf("SAMPLE_GENERATED: Send Force Data %03d to %03d \n", froceData->rdt_sequence, force_data.rdt_sequence);
         mod.SendMessage(&RawForceSensorDataMsg);
         mod.SendMessage(&ForceSensorDataMsg);
@@ -351,8 +240,6 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
             netrec->sendRequestStop();   // sending signal of stop stream
             
 			netrec->closeFile();
-            //break;
-
         }
     }
 

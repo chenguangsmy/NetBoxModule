@@ -100,7 +100,6 @@ double GetAbsTime(void)
 #endif
 }
 
-//void *respondRTMA(void *arg)
 void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
 {
   while (netRTMA->flag_exit == false)
@@ -115,10 +114,9 @@ void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
     //    setStreamStart(); //set a flag for stream loop as true;
     //    setStreamStop()
     //    fileClose();      // close the wrote file
-    //flag = netRTMA->respond(forcedat, flag);
     netRTMA->respondr(forcedat, netrec);
     // Cannot guarentee if the same data would send twice, as these two is not in the same thread. 
-    //  Or need to add additional flags to compensate.  
+    // Or need to add additional flags to compensate.  
     //pthread_mutex_unlock(&mutex);
     //printf("end of netRTMA->respond\n");
     if (netRTMA->flag_exit == false)
@@ -135,71 +133,11 @@ void *respondRTMA(NetftRTMA *netRTMA, Netboxrec *netrec)
   printf("RTMA: Finish respondRTMA function!");
 }
 
-void *processNetrec(void *arg) // not using this now
-{ 
-  Netboxrec *netrec = (Netboxrec *)arg;
-  printf("Enter thread netrec! \n");
-  while (1)
-  {
-    // mutex_lock flag
-    //pthread_mutex_lock(&mutex);
-
-    if (netrec->getStreamStatus()) // if true, start stream; 
-    {
-      printf("Streaming: ");
-      netrec->recvStream();
-      netrec->writeFile();
-      netrec->getforceData(forcedat);
-      printf("\n");
-    }
-    if (flag.UpdateAvg)
-    {
-		  printf("NREC: flag.Updateavg! \n");
-      //netrec->updateAvg();
-      flag.UpdateAvg = false;
-    }
-    if (flag.FileInit & (~fileopen))
-    {
-	    printf("NREC: flag.FileInit! \n");
-      fileopen = true;
-      flag.FileInit = false;
-      flag.stream = true;
-      //filename->clear();
-    }
-    if (flag.SendRequest)
-    {
-		printf("NREC: flag.SendRequest! \n");
-      flag.SendRequest = false;
-      //netrec->sendRequestStart();
-    }
-    if (flag.stopStream)
-    {
-	  printf("NREC: flag.Stopstream! \n");
-      flag.stream = false;
-      flag.stopStream = false;
-      //netrec->sendRequestStop();
-    }
-    if (flag.CloseFile)
-    {
-	  printf("NREC: flag.CloseFile! \n");
-      flag.CloseFile = false;
-      fileopen = false;
-      //netrec->closeFile();
-    }
-
-    //pthread_mutex_unlock(&mutex);
-    //printf("NREC: end processNetrec loop! \n");
-  }
-  printf("NREC: Finish thread netrec! \n");
-}
-
-void *processNetrec_noflag(void *arg)
+void *processNetrec(void *arg)
 { 
   Netboxrec *netrec = (Netboxrec *)arg;
   while (keep_going) 
   {
-    // mutex_lock flag
-    
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
 	  flag.stream = false;
@@ -227,17 +165,11 @@ int main(int argc, char **argv)
   Netboxrec netrec;
   netrec.socketInit();
   InitializeAbsTime();
-
   int disp_cnt = DISP_MAX_CNT;
-
   pthread_t netrec_thread;
-  //pthread_t rtma_thread;
-  pthread_create(&netrec_thread, NULL, processNetrec_noflag, (void*) &netrec);
-  //pthread_create(&rtma_thread, NULL, respondRTMA, (void*) &netRTMA); 
-
+  pthread_create(&netrec_thread, NULL, processNetrec, (void*) &netrec);
   respondRTMA(&netRTMA, &netrec);
   pthread_join(netrec_thread, NULL);
-  //pthread_join(rtma_thread, NULL);
   netrec.socketClose();
   return 0;
 }
