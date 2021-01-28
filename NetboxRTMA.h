@@ -71,7 +71,7 @@ private:
     string file_dir;
     bool flag_sconfig;
     bool flag_xmconfig;
-    bool flag_sent;
+    bool is_send;
 
     bool got_msg;
     CMessage inMsg;
@@ -97,7 +97,7 @@ public:
         got_msg = false;
         flag_sconfig = false;
         flag_xmconfig = false;
-        flag_sent = true;
+        is_send = false;
         flag_exit = false;
         //functions
         if (argc < 2)
@@ -125,6 +125,7 @@ public:
         mod.Subscribe(MT_SAMPLE_GENERATED);
         mod.Subscribe(MT_MOVE_HOME);
         mod.Subscribe(MT_SESSION_CONFIG);
+        mod.Subscribe(MT_TASK_STATE_CONFIG);
         mod.Subscribe(MT_XM_START_SESSION);
     }
 
@@ -166,9 +167,6 @@ void NetftRTMA::updateMsg(RESPONSE forceData)
 void NetftRTMA::receive()
 {
     got_msg = mod.ReadMessage(&inMsg, 0.05);
-    if (got_msg == true)
-        flag_sent = false; //flag mark if a message have been sent
-        //printf("flagSet, Enable sendint SAMPLE\n");
 }
 
 void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
@@ -219,7 +217,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
             mod.SendMessage(&PingAckMessage);
         }
     }
-    else if (inMsg.msg_type == MT_SAMPLE_GENERATED & flag_sent == false)
+    else if (inMsg.msg_type == MT_SAMPLE_GENERATED & is_send == true)
     {
         inMsg.GetData(&sample_gen);
         // package message, each struct element to message.
@@ -227,7 +225,6 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
         printf("SAMPLE_GENERATED: Send Force Data %03d to %03d \n", froceData->rdt_sequence, force_data.rdt_sequence);
         mod.SendMessage(&RawForceSensorDataMsg);
         mod.SendMessage(&ForceSensorDataMsg);
-        flag_sent == true;
     }
     else if (inMsg.msg_type == MT_EXIT)
     {
@@ -244,7 +241,41 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 			netrec->closeFile();
         }
     }
+    else if (inMsg.msg_type == MT_TASK_STATE_CONFIG)
+    {
+      //printf("M: MT_TASK_STATE_CONFIG \n");
+      MDF_TASK_STATE_CONFIG task_state_data;
+      inMsg.GetData( &task_state_data);
+      switch(task_state_data.id)
+      {
+        case 1:   // set joint center and endpoint center
+          cout << " ST 1, ";
+          is_send = false;
+          break;
+        case 2: // Present
+          cout << " ST 2, ";
+          is_send = true;
+          break;
+        case 3: //ForceRamp
+          cout << " ST 3, ";
+          break;
+        case 4: //Move
+          cout << " ST 4, ";
+          break;
+        case 5: // hold
+          cout << " ST 5, ";
+          break;
+        case 6:
+          cout << " ST 6, ";
+          break;
+        case 7:
+          cout << " ST 7, " << endl;
+          break;
+        default:
+          break;
+      }
 
+    }
     // task conditions logic
     if (flag_sconfig & flag_xmconfig)
     { //not writing file, but receieved config, open file
