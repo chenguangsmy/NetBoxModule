@@ -330,7 +330,7 @@ void Netboxrec::writeFile()
       outdata << AvgForce[j] << ",";
     }
     // ...Todo: add elipse here!
-    outdata << time[i]; // receieve time
+    outdata << time[i]; // receieve time! why the time are always the same???
     outdata << endl; 
   }
 }
