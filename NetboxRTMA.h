@@ -191,7 +191,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
         inMsg.GetData(&stsession);
         strcpy(subject_name, stsession.subject_name);
         session_num = stsession.calib_session_id;
-        sprintf(file_name, "%s%d.csv", subject_name, session_num);
+        sprintf(file_name, "%sFT%d.csv", subject_name, session_num);
         cout << "filename: " << file_name << endl;
         flag_xmconfig = true;
     }
