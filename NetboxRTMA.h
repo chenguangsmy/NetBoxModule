@@ -25,7 +25,7 @@ double win_counter_freq;
 #define COMMAND_BATCH 3  // Command code 2 starts streaming, 3 for buffered
 #define COMMAND_STOP 0   // stop streaming;
 #define RESP_SIZE 36     // the size (byte) of response_struct
-#define NUM_SAMPLES 40   // everytime send 40 samples (the same with netbox control ip)
+#define NUM_SAMPLES 10   // everytime send 40 samples (the same with netbox control ip)
 #define DISP_MAX_CNT 100 // display force data once a second
 #define AVG_MAX_CNT 5    // average 5 samples
 
