@@ -20,15 +20,7 @@
 double win_counter_freq;
 #endif
 
-#define PORT 49152       // Port the Net F/T always uses
-#define COMMAND_STREAM 2 //
-#define COMMAND_BATCH 3  // Command code 2 starts streaming, 3 for buffered
-#define COMMAND_STOP 0   // stop streaming;
-#define RESP_SIZE 36     // the size (byte) of response_struct
-#define NUM_SAMPLES 10   // everytime send 40 samples (the same with netbox control ip)
-#define DISP_MAX_CNT 100 // display force data once a second
-#define AVG_MAX_CNT 5    // average 5 samples
-
+#include "Netboxrec.h"
 #include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,7 +33,7 @@ double win_counter_freq;
 #include <cstdlib> // for exit function
 #include <time.h>
 #include <pthread.h>
-#include "Netboxrec.h"
+
 
 using std::cerr;
 using std::endl;
