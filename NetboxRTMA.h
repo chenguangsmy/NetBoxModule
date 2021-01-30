@@ -269,7 +269,7 @@ void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 
     }
     // task conditions logic
-    if (flag_sconfig & flag_xmconfig)
+    if (flag_sconfig && flag_xmconfig)
     { //not writing file, but receieved config, open file
         // concern: if a session has longer (more than a session), will this still work?
         printf("before enter fileInit()\n");

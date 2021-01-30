@@ -110,6 +110,7 @@ void *processNetrec(void *arg)
   {
     if (netrec->getStreamStatus()) // if true, start stream; 
     {
+	  //printf("Streaming...\n");
 	  flag.stream = false;
 	  flag.stream = true;
       netrec->recvStream();
@@ -119,7 +120,7 @@ void *processNetrec(void *arg)
                                       // both main thread and netrec visit this forcedat, Lock here?
       pthread_mutex_unlock(&mutex);
     }
-    if (~keep_going)
+    if (!keep_going)
     { 
       break;
     }
