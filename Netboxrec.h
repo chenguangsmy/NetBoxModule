@@ -166,7 +166,6 @@ public:
   void  writeFile();     // write data on .csv file
   int   closeFile();     // close data write stream
   void  showElapse();
-
   double *getAverageforceData(); // return average force data
   int   getRDT();
   int   getFT();
@@ -349,6 +348,7 @@ int Netboxrec::sendRequestStop()
 }
 void Netboxrec::getforceData(RESPONSE* forcedat){
 	// to *forcedat = *ft_resp;
+  // should be safe use memcpy.
 	memcpy((void*) forcedat, (void*) &ft_resp, sizeof(RESPONSE));
 //	return ft_resp;
 }
