@@ -283,17 +283,18 @@ int Netboxrec::recvStream()
       force[i * 6 + j] = raw_force[i * 6 + j] - AvgForce[j];
     }
     time[i] = GetAbsTime();
+      // copy data into resp
+      // ...Todo: deal with the elapse! 
+    ft_resp.rdt_sequence = rdt_sequence[i];
+    ft_resp.ft_sequence = ft_sequence[i];
+    ft_resp.status = status[i];
+    for (i = 0; i < 6; i++){
+      ft_resp.FTData[i] = force[(i)*6 + i];
+      ft_resp.FTAvg[i] = AvgForce[j];
+    }
+    ft_resp.time = time[i];
   }
-  // copy data into resp
-  // ...Todo: deal with the elapse! 
-  ft_resp.rdt_sequence = rdt_sequence[NUM_SAMPLES-1];
-  ft_resp.ft_sequence = ft_sequence[NUM_SAMPLES-1];
-  ft_resp.status = status[NUM_SAMPLES-1];
-  for (i = 0; i < 6; i++){
-    ft_resp.FTData[i] = force[(NUM_SAMPLES-1)*6 + i];
-    ft_resp.FTAvg[i] = AvgForce[j];
-  }
-  ft_resp.time = time[NUM_SAMPLES-1];
+
 }
 int Netboxrec::updateAvg()
 {
