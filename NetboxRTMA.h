@@ -119,6 +119,7 @@ public:
         mod.Subscribe(MT_SESSION_CONFIG);
         mod.Subscribe(MT_TASK_STATE_CONFIG);
         mod.Subscribe(MT_XM_START_SESSION);
+        mod.Subscribe(MT_DENSO_MOVE_COMPLETE);
     }
 
     // deconstruction;
@@ -163,12 +164,14 @@ void NetftRTMA::receive()
 
 void NetftRTMA::respondr(RESPONSE *froceData, Netboxrec *netrec)
 {
-    if (inMsg.msg_type == MT_MOVE_HOME)
+    //if (inMsg.msg_type == MT_MOVE_HOME)
+    if (inMsg.msg_type == MT_DENSO_MOVE_COMPLETE)
     {
         printf("MT_MOVE_HOME: update Avg. \n");
         netrec->updateAvg();
         inMsg.GetData(&tsc);
     }
+    
     else if (inMsg.msg_type == MT_SESSION_CONFIG)
     {
         printf("MT_SESSION_CONFIG. \n");
